@@ -30,11 +30,16 @@ export default function ReferralSuccess() {
               <CheckCircle2 size={34} className="text-[#1e6641]" />
             </div>
 
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">Patient referred successfully</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/60 mb-1">
+              {s.isOffline ? 'Saved locally (Offline Mode)' : 'Patient referred successfully'}
+            </p>
             <h1 className="text-2xl font-bold text-white mb-1">{patientName}</h1>
             <p className="text-sm text-white/70 mb-6">
-              The doctor at <span className="text-white font-medium">{facility}</span> has been notified and will review this case.
+              {s.isOffline
+                ? 'Record stored securely on your device. It will automatically synchronize with Baramati CHC when you reconnect.'
+                : <>The doctor at <span className="text-white font-medium">{facility}</span> has been notified and will review this case.</>}
             </p>
+
 
             {/* Details */}
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/10 space-y-3">

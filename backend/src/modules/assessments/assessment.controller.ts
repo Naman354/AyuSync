@@ -104,17 +104,42 @@ export const createAssessment = async (req: Request, res: Response) => {
 
 export const getAssessmentsByPatient = async (req: Request, res: Response) => {
   try {
-    const { patientId } = req.params;
+    const patientId = req.params.patientId || (req.query.patientId as string);
+    const where = patientId ? { patientId } : {};
+
     const assessments = await prisma.assessment.findMany({
-      where: { patientId },
+      where,
       include: { 
         symptoms: true,
-        aiRecommendations: true
+        aiRecommendations: true,
+        encounter: {
+          include: { vitals: true }
+        }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 20
     });
-    res.json(assessments);
+
+    // Format vitals map on each assessment for clean frontend consumption
+    const formatted = assessments.map(a => {
+      const vitalList = a.encounter?.vitals || [];
+      const vitalsMap: Record<string, any> = {};
+      for (const v of vitalList) {
+        if (v.type === 'BP') vitalsMap.bloodPressure = v.value;
+        if (v.type === 'HR') vitalsMap.heartRate = parseInt(v.value, 10);
+        if (v.type === 'TEMP') vitalsMap.temperature = parseFloat(v.value);
+        if (v.type === 'SPO2') vitalsMap.spo2 = parseFloat(v.value);
+        if (v.type === 'RR') vitalsMap.respiratoryRate = parseInt(v.value, 10);
+      }
+      return {
+        ...a,
+        vitals: Object.keys(vitalsMap).length > 0 ? vitalsMap : null
+      };
+    });
+
+    res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+

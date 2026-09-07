@@ -14,15 +14,13 @@ import Queue from './pages/Queue';
 import {
   HeartPulse,
   LogOut,
-  UserCheck,
-  Stethoscope,
   LayoutDashboard,
   Users,
   Clock,
   Building2,
-  CheckSquare,
   UserPlus,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 
 // ─── Shared nav link component ───────────────────────────────────────────────
@@ -96,12 +94,12 @@ const ProtectedRoute = () => {
           </Link>
 
           {/* Role-aware navigation */}
-          <nav className="hidden md:flex items-center gap-0.5 flex-1 ml-6">
+          <nav className="hidden md:flex items-center gap-1 flex-1 ml-6">
             {isWorker ? (
               <>
-                <NavLink to="/worker" exact><LayoutDashboard size={15} />Home</NavLink>
-                <NavLink to="/patients"><Users size={15} />My Patients</NavLink>
-                <NavLink to="/followups"><CheckSquare size={15} />Today's Tasks</NavLink>
+                <NavLink to="/worker" exact><LayoutDashboard size={15} />Home & Tasks</NavLink>
+                <NavLink to="/patients"><Users size={15} />Community Members</NavLink>
+                <NavLink to="/followups"><AlertTriangle size={15} />Care Gap Alerts</NavLink>
               </>
             ) : isPatient ? (
               <>
@@ -111,25 +109,36 @@ const ProtectedRoute = () => {
             ) : (
               <>
                 <NavLink to="/dashboard" exact><LayoutDashboard size={15} />Home</NavLink>
-                <NavLink to="/queue"><Clock size={15} />Patients Waiting</NavLink>
-                <NavLink to="/patients"><Users size={15} />All Patients</NavLink>
-                <NavLink to="/facilities"><Building2 size={15} />Facilities</NavLink>
+                <NavLink to="/queue"><Clock size={15} />Consultation Queue</NavLink>
+                <NavLink to="/followups"><AlertTriangle size={15} />Care Continuity</NavLink>
+                <NavLink to="/patients"><Users size={15} />Patient Records</NavLink>
+                <NavLink to="/facilities"><Building2 size={15} />Clinic Status</NavLink>
               </>
             )}
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Prominent Demo Role Switcher */}
+            <button
+              onClick={switchRole}
+              title="Click to switch between Doctor and Village Health Worker roles"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs text-gray-700 shadow-sm transition-all hover:border-[#1e6641]/50"
+            >
+              <span className="hidden sm:inline text-gray-500">Role:</span>
+              <span className="font-semibold text-[#1e6641] flex items-center gap-1">
+                {isWorker ? '👩‍⚕️ Health Worker (ASHA)' : isPatient ? '🧑 Patient' : '👨‍⚕️ Doctor (MO)'}
+              </span>
+              <RefreshCw size={11} className="text-gray-400 ml-0.5" />
+            </button>
+
             {/* + New Patient (worker only, persistent CTA) */}
             {isWorker && (
               <Link
                 to="/intake"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#16503200] text-white text-sm font-semibold transition-colors"
-                style={{ background: '#1e6641' }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#165032')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#1e6641')}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white text-xs font-semibold shadow-sm transition-colors"
               >
-                <UserPlus size={14} />
+                <UserPlus size={13} />
                 New Patient
               </Link>
             )}
@@ -139,17 +148,8 @@ const ProtectedRoute = () => {
               <div className="w-7 h-7 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-bold text-xs">
                 {displayName.charAt(0)}
               </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-900 leading-tight">{displayName}</div>
-                <button
-                  onClick={switchRole}
-                  title="Switch between Doctor and Health Worker view"
-                  className="flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-[#1e6641] transition-colors"
-                >
-                  {isWorker ? <UserCheck size={10} /> : <Stethoscope size={10} />}
-                  {isWorker ? 'Health Worker' : 'Doctor'}
-                  <RefreshCw size={9} className="ml-0.5" />
-                </button>
+              <div className="text-xs font-semibold text-gray-800 leading-tight">
+                {displayName}
               </div>
             </div>
 
@@ -160,7 +160,7 @@ const ProtectedRoute = () => {
                 window.location.href = '/login';
               }}
               title="Sign out"
-              className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
             >
               <LogOut size={16} />
             </button>
@@ -169,10 +169,56 @@ const ProtectedRoute = () => {
       </header>
 
       {/* ── Page content ── */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-20 md:pb-6">
         <Outlet />
       </main>
+
+      {/* ── Mobile bottom navigation bar ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 flex items-center justify-around py-2 px-2 shadow-lg">
+        {isWorker ? (
+          <>
+            <Link to="/worker" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <LayoutDashboard size={18} />
+              <span>Tasks</span>
+            </Link>
+            <Link to="/intake" className="flex flex-col items-center text-[10px] font-medium text-[#1e6641]">
+              <div className="w-8 h-8 rounded-full bg-[#1e6641] text-white flex items-center justify-center -mt-3 shadow-md">
+                <UserPlus size={16} />
+              </div>
+              <span>Intake</span>
+            </Link>
+            <Link to="/followups" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <AlertTriangle size={18} />
+              <span>Alerts</span>
+            </Link>
+            <Link to="/patients" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <Users size={18} />
+              <span>Patients</span>
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link to="/dashboard" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <LayoutDashboard size={18} />
+              <span>Home</span>
+            </Link>
+            <Link to="/queue" className="flex flex-col items-center text-[10px] font-medium text-[#1e6641]">
+              <Clock size={18} />
+              <span>Queue</span>
+            </Link>
+            <Link to="/followups" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <AlertTriangle size={18} />
+              <span>Continuity</span>
+            </Link>
+            <Link to="/patients" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <Users size={18} />
+              <span>Patients</span>
+            </Link>
+          </>
+        )}
+      </nav>
     </div>
+
   );
 };
 

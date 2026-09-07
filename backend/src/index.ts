@@ -64,6 +64,9 @@ import queueRoutes from './modules/queue/queue.routes';
 import appointmentRoutes from './modules/appointments/appointment.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
 import syncRoutes from './modules/sync/sync.routes';
+import followupRoutes from './modules/followups/followup.routes';
+import aiRoutes from './modules/ai/ai.routes';
+import notificationRoutes from './modules/notifications/notification.routes';
 import { startJobs } from './jobs/caregap.job';
 
 app.use('/api/auth', authRoutes);
@@ -75,6 +78,10 @@ app.use('/api/queue', queueRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/followups', followupRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/notifications', notificationRoutes);
+
 
 // Health check and system verification
 app.get('/health', async (req, res) => {

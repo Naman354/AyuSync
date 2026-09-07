@@ -155,6 +155,46 @@ export default function PatientIntakeFlow() {
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    const isOfflineSim = localStorage.getItem('ayusync_simulate_offline') === 'true';
+    const token = `REF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    if (isOfflineSim) {
+      // Offline mode active: queue mutation directly in localStorage
+      const q = JSON.parse(localStorage.getItem('ayusync_mutation_queue') || '[]');
+      const offlineId = `offline-pat-${Date.now()}`;
+      q.push({
+        operationId: offlineId,
+        entity: 'patient',
+        action: 'CREATE',
+        payload: {
+          name: patient.name || 'Community Patient',
+          age: parseInt(patient.age || '30', 10),
+          gender: patient.gender,
+          village: patient.address,
+          phone: patient.phone || `+91${Math.floor(1e9 + Math.random() * 9e9)}`,
+          vitals,
+          symptoms,
+          facilityId: selectedFacility,
+          urgency: assessment?.urgency || 'ROUTINE',
+        }
+      });
+      localStorage.setItem('ayusync_mutation_queue', JSON.stringify(q));
+
+      navigate('/referral-success', {
+        state: {
+          token,
+          patientName: patient.name || 'Community Patient',
+          urgency: assessment?.urgency || 'ROUTINE',
+          facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
+          symptoms,
+          needsAmbulance,
+          isOffline: true,
+        }
+      });
+      setSubmitting(false);
+      return;
+    }
+
     try {
       let patientId = '';
       try {
@@ -169,11 +209,10 @@ export default function PatientIntakeFlow() {
         patientId = r.data?.id || r.data?.data?.id;
       } catch { patientId = 'demo-' + Date.now(); }
 
-      const token = `REF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       try {
         if (selectedFacility && patientId) {
           await api.post('/referrals', {
-            patientId, originId: 'fac-phc-1', destinationId: selectedFacility,
+            patientId, originId: 'fac-khandala-phc', destinationId: selectedFacility,
             urgency: assessment?.urgency || 'ROUTINE',
             reason: referralNotes || symptoms.join(', ') || 'Routine evaluation',
           });
@@ -184,12 +223,14 @@ export default function PatientIntakeFlow() {
         state: {
           token, patientName: patient.name || 'Community Patient',
           urgency: assessment?.urgency || 'ROUTINE',
-          facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Mokama CHC',
+          facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
           symptoms, needsAmbulance,
+          isOffline: false,
         }
       });
     } catch (e) { console.error(e); } finally { setSubmitting(false); }
   };
+
 
   const pct = ((step - 1) / (STEPS.length - 1)) * 100;
 
