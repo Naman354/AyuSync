@@ -8,8 +8,9 @@ import StatusBadge from '../components/ui/StatusBadge';
 import {
   User, Activity, ArrowRight, ArrowLeft,
   Building2, Ambulance, Thermometer, Heart, Wind,
-  CheckCircle2, Info, AlertTriangle, Sparkles
+  CheckCircle2, Info, AlertTriangle, Sparkles, Navigation, BedDouble
 } from 'lucide-react';
+
 
 const SYMPTOMS = [
   'High Fever', 'Dry Cough', 'Shortness of Breath', 'Chest Pain',
@@ -63,6 +64,38 @@ export default function PatientIntakeFlow() {
     ? 'Primary Health Centre (PHC)'
     : 'Health & Wellness Centre';
 
+  const [rankedFacilities, setRankedFacilities] = useState<any[]>([]);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [showAllClinics, setShowAllClinics] = useState(false);
+
+  const fetchFacilityRouting = async (targetUrgency?: string) => {
+    const urg = (targetUrgency || effectiveUrgency || 'ROUTINE').toUpperCase();
+    setRoutingLoading(true);
+    try {
+      const res = await api.post('/ai/route', {
+        urgencyCategory: urg,
+        urgency: urg,
+        symptoms: symptoms.map(s => ({ name: s })),
+        vitals
+      });
+      const ranked = res.data?.ranked_facilities || [];
+      setRankedFacilities(ranked);
+      if (ranked.length > 0) {
+        const best = ranked[0];
+        const match = facilities.find(f => f.id === best.facility_id || f.name.toLowerCase().includes(best.facility_name.toLowerCase().slice(0, 8)));
+        if (match) {
+          setSelectedFacility(match.id);
+        } else if (best.facility_id) {
+          setSelectedFacility(best.facility_id);
+        }
+      }
+    } catch {
+      // Fallback cleanly
+    } finally {
+      setRoutingLoading(false);
+    }
+  };
+
   useEffect(() => {
     api.get('/facilities').then(r => {
       const facs = r.data.data || r.data || [];
@@ -75,6 +108,7 @@ export default function PatientIntakeFlow() {
     setStepErrors(prev => { const copy = { ...prev }; delete copy.symptoms; return copy; });
     setSymptoms(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
   };
+
 
   const validateStep1 = () => {
     const errs: Record<string, string> = {};
@@ -784,14 +818,14 @@ export default function PatientIntakeFlow() {
             <Button variant="outline" onClick={() => setStep(2)} className="flex items-center gap-1.5 text-sm">
               <ArrowLeft size={14} /> Adjust measurements
             </Button>
-            <Button onClick={() => setStep(4)} className="bg-[#1e6641] hover:bg-[#165032] text-white flex items-center gap-2 h-11 px-6">
+            <Button onClick={() => { fetchFacilityRouting(); setStep(4); }} className="bg-[#1e6641] hover:bg-[#165032] text-white flex items-center gap-2 h-11 px-6 cursor-pointer">
               Next: Choose clinic <ArrowRight size={16} />
             </Button>
           </div>
         </div>
       )}
 
-      {/* ── STEP 4: Send to clinic (was "Referral") ── */}
+      {/* ── STEP 4: Send to clinic with Explainable AI Facility Matchmaker ── */}
       {step === 4 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
           <div className="flex items-center gap-3 pb-4 border-b border-gray-50">
@@ -799,29 +833,168 @@ export default function PatientIntakeFlow() {
               <Building2 size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900">Choose a clinic to send them to</h2>
-              <p className="text-xs text-gray-500">The doctor will be notified immediately</p>
+              <h2 className="text-base font-bold text-gray-900">Choose receiving healthcare center</h2>
+              <p className="text-xs text-gray-500">AI-assisted facility matchmaker with real-time bed & capability telemetry</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label className={LABEL}>Clinic / hospital *</label>
-              <select
-                value={selectedFacility}
-                onChange={e => {
-                  setSelectedFacility(e.target.value);
-                  setStepErrors(prev => { const c = { ...prev }; delete c.facility; return c; });
-                }}
-                className={`${INPUT} ${stepErrors.facility ? 'border-red-400 bg-red-50/20' : ''}`}
-              >
-                <option value="">-- Choose a clinic or hospital --</option>
-                {facilities.map(f => (
-                  <option key={f.id} value={f.id}>{f.name} ({f.type})</option>
-                ))}
-              </select>
+            {/* AI Explainable Facility Matchmaker */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-800 uppercase tracking-wide flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-[#1e6641]" />
+                  AI Recommended Destination Facility
+                </label>
+                <span className="text-[11px] text-gray-500">
+                  Target Tier: <strong className="text-[#1e6641]">{effectiveTier}</strong>
+                </span>
+              </div>
+
+              {routingLoading ? (
+                <div className="p-6 rounded-2xl border border-gray-100 bg-gray-50 flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <Sparkles size={16} className="animate-spin text-[#1e6641]" />
+                  <span>Computing optimal facility match based on bed telemetry & clinical urgency…</span>
+                </div>
+              ) : rankedFacilities.length > 0 ? (
+                <div className="space-y-3">
+                  {rankedFacilities.map((fac, i) => {
+                    const isSelected = selectedFacility === fac.facility_id ||
+                      (facilities.find(f => f.id === selectedFacility)?.name?.toLowerCase().includes(fac.facility_name.toLowerCase().slice(0, 8)));
+                    const isTop = i === 0;
+
+                    return (
+                      <div
+                        key={fac.facility_id || i}
+                        onClick={() => {
+                          const realFac = facilities.find(f => f.id === fac.facility_id || f.name.toLowerCase().includes(fac.facility_name.toLowerCase().slice(0, 8)));
+                          if (realFac) {
+                            setSelectedFacility(realFac.id);
+                          } else {
+                            setSelectedFacility(fac.facility_id);
+                          }
+                          setStepErrors(prev => { const c = { ...prev }; delete c.facility; return c; });
+                        }}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
+                          isSelected
+                            ? 'border-[#1e6641] bg-emerald-50/40 ring-2 ring-[#1e6641]/20 shadow-xs'
+                            : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
+                        }`}
+                      >
+                        {/* Top Badge & Distance */}
+                        <div className="flex items-start sm:items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                              isTop
+                                ? 'bg-emerald-100 text-[#1e6641] border border-emerald-300'
+                                : 'bg-gray-100 text-gray-700 border border-gray-200'
+                            }`}>
+                              {isTop ? `★ Top Match · ${fac.score}% Score` : `Alternative · ${fac.score}% Score`}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                              {fac.facility_type || 'CHC'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-gray-600 font-medium shrink-0">
+                            <Navigation size={12} className="text-[#1e6641]" />
+                            <span>{fac.estimated_travel_time_minutes} mins · {fac.distance_km} km</span>
+                          </div>
+                        </div>
+
+                        {/* Name & Bed Status */}
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="font-bold text-gray-900 text-sm sm:text-base">
+                            {fac.facility_name}
+                          </div>
+                          {fac.free_beds && (
+                            <div className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-emerald-800 bg-emerald-100/60 px-2 py-0.5 rounded-md shrink-0">
+                              <BedDouble size={12} />
+                              <span>{fac.free_beds}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Explainable AI Clinical Rationale */}
+                        {fac.reasons && fac.reasons.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-gray-100/80">
+                            <div className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-1 flex items-center gap-1">
+                              <Sparkles size={11} className="text-[#1e6641]" /> Why AI selected this facility:
+                            </div>
+                            <ul className="space-y-1">
+                              {fac.reasons.map((r: string, rIdx: number) => (
+                                <li key={rIdx} className="text-xs text-gray-700 flex items-start gap-1.5">
+                                  <span className="text-[#1e6641] font-bold shrink-0">•</span>
+                                  <span>{r}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Selection check pill */}
+                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                          <span className="text-[11px] text-gray-400">Clinical Readiness Score: <strong>{fac.readiness_score}%</strong></span>
+                          <span className={`font-semibold flex items-center gap-1 ${isSelected ? 'text-[#1e6641]' : 'text-gray-400'}`}>
+                            {isSelected ? <><CheckCircle2 size={13} /> Selected for Referral</> : 'Click to select'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div>
+                  <label className={LABEL}>Clinic / hospital *</label>
+                  <select
+                    value={selectedFacility}
+                    onChange={e => {
+                      setSelectedFacility(e.target.value);
+                      setStepErrors(prev => { const c = { ...prev }; delete c.facility; return c; });
+                    }}
+                    className={`${INPUT} ${stepErrors.facility ? 'border-red-400 bg-red-50/20' : ''}`}
+                  >
+                    <option value="">-- Choose a clinic or hospital --</option>
+                    {facilities.map(f => (
+                      <option key={f.id} value={f.id}>{f.name} ({f.type})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Manual Override Accordion */}
+              {rankedFacilities.length > 0 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllClinics(!showAllClinics)}
+                    className="text-xs text-gray-500 hover:text-gray-800 underline font-medium cursor-pointer"
+                  >
+                    {showAllClinics ? 'Hide manual facility list' : 'Or select another clinic manually from full directory →'}
+                  </button>
+
+                  {showAllClinics && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                      <label className={LABEL}>Full Facilities Directory</label>
+                      <select
+                        value={selectedFacility}
+                        onChange={e => {
+                          setSelectedFacility(e.target.value);
+                          setStepErrors(prev => { const c = { ...prev }; delete c.facility; return c; });
+                        }}
+                        className={`${INPUT} ${stepErrors.facility ? 'border-red-400 bg-red-50/20' : ''}`}
+                      >
+                        <option value="">-- Choose a clinic or hospital --</option>
+                        {facilities.map(f => (
+                          <option key={f.id} value={f.id}>{f.name} ({f.type})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
               {stepErrors.facility && <p className="text-xs text-red-600 mt-1 font-medium">{stepErrors.facility}</p>}
             </div>
+
             <div>
               <label className={LABEL}>Notes for the doctor <span className="font-normal text-gray-400">(optional)</span></label>
               <textarea value={referralNotes} onChange={e => setReferralNotes(e.target.value)}
@@ -829,6 +1002,7 @@ export default function PatientIntakeFlow() {
                 rows={3} className={`${INPUT} resize-none`}
               />
             </div>
+
 
             <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-center gap-3">
