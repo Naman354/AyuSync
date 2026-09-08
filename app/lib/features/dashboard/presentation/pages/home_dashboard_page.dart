@@ -6,7 +6,6 @@ import '../../../../core/models/followup_model.dart';
 import '../../../../core/models/patient_model.dart';
 import '../../../../core/network/network_quality_service.dart';
 import '../../../../core/localization/app_language.dart';
-import '../../../../core/localization/localization_extensions.dart';
 import '../../../followup/presentation/pages/followup_task_details_page.dart';
 
 class HomeDashboardPage extends StatefulWidget {

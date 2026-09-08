@@ -17,22 +17,26 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
     if (currentTask == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Follow-up Task Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: Text(appState.translate('task_details_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           backgroundColor: Colors.white,
           foregroundColor: AppColors.forest,
           elevation: 0,
         ),
-        body: const Center(child: Text('No follow-up task found')),
+        body: Center(child: Text(appState.translate('no_tasks_found'))),
       );
     }
 
     final isOverdue = currentTask.status == 'OVERDUE';
     final isCompleted = currentTask.status == 'COMPLETED';
+    final statusText = isCompleted
+        ? appState.translate('status_completed')
+        : (isOverdue ? appState.translate('status_overdue') : appState.translate('status_due_soon'));
+    final dueDateStr = '${currentTask.dueDate.day}/${currentTask.dueDate.month}/${currentTask.dueDate.year}';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Follow-up Task Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('task_details_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -67,7 +71,10 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Task Status: ${currentTask.status} • Due on ${currentTask.dueDate.day}/${currentTask.dueDate.month}/${currentTask.dueDate.year}',
+                      appState.translate('task_status_banner', args: {
+                        'status': statusText,
+                        'date': dueDateStr,
+                      }),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -95,11 +102,17 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Patient Target', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    Text(
+                      appState.translate('patient_target_title'),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 6),
                     Text(currentTask.patientName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
-                    Text('Phone: ${currentTask.patientPhone}', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                    Text(
+                      appState.translate('phone_prefix', args: {'phone': currentTask.patientPhone}),
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                    ),
                   ],
                 ),
               ),
@@ -119,7 +132,10 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Doctor Instructions', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    Text(
+                      appState.translate('doctor_instructions_title'),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 6),
                     Text(currentTask.taskDescription, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -161,7 +177,10 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Prescribed Medication Regimen', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    Text(
+                      appState.translate('prescribed_regimen_title'),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
                     const SizedBox(height: 10),
                     ...currentTask.prescribedMedicines.map(
                       (med) => Padding(
@@ -202,9 +221,9 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                   );
                 },
                 icon: const Icon(Icons.edit_calendar_rounded),
-                label: const Text(
-                  'Record Home Visit & Vitals',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                label: Text(
+                  appState.translate('record_visit_vitals'),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               )
             else
@@ -215,7 +234,9 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Visit completed: "${currentTask.visitNotes ?? "Completed by ASHA"}"',
+                  appState.translate('visit_completed_notes', args: {
+                    'notes': currentTask.visitNotes ?? 'Completed by ASHA',
+                  }),
                   style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),

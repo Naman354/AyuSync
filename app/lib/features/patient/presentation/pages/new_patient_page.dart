@@ -322,10 +322,6 @@ class _NewPatientPageState extends State<NewPatientPage> {
     }
   }
 
-  int _calculateAgeFromDob(String dob) {
-    return PatientValidators.calculateAgeFromDob(dob) ?? 30;
-  }
-
   static const List<Map<String, String>> _quickSymptomDefs = [
     {'id': 'High Fever', 'key': 'symptom_high_fever'},
     {'id': 'Severe Breathlessness', 'key': 'symptom_breathlessness'},

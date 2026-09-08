@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/models/assessment_model.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../widgets/voice_input.dart';
+import '../../../../core/utils/patient_validators.dart';
 
 class AssessmentFormPage extends StatefulWidget {
   const AssessmentFormPage({super.key});
@@ -14,42 +14,145 @@ class AssessmentFormPage extends StatefulWidget {
 
 class _AssessmentFormPageState extends State<AssessmentFormPage> {
   final _formKey = GlobalKey<FormState>();
-  final _symptomController = TextEditingController(text: 'Persistent dry cough and mild breathlessness');
-  final _durationController = TextEditingController(text: '3');
-  final _tempController = TextEditingController(text: '99.4');
-  final _systolicController = TextEditingController(text: '135');
-  final _diastolicController = TextEditingController(text: '88');
-  final _pulseController = TextEditingController(text: '84');
-  final _spo2Controller = TextEditingController(text: '95');
-  final _glucoseController = TextEditingController(text: '110');
+  final _symptomController = TextEditingController();
   final _notesController = TextEditingController();
+  final _tempController = TextEditingController(text: '98.6');
+  final _systolicController = TextEditingController(text: '120');
+  final _diastolicController = TextEditingController(text: '80');
+  final _pulseController = TextEditingController(text: '72');
+  final _spo2Controller = TextEditingController(text: '98');
 
-  String _severity = 'MODERATE';
+  String _selectedSeverity = 'MODERATE';
+  int _durationDays = 3;
   bool _isProcessing = false;
+  final Map<String, String> _fieldErrors = {};
 
-  void _handleVoiceTranscription(String text) {
-    setState(() {
-      _symptomController.text = text;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Voice transcribed into symptoms field')),
-    );
+  final List<Map<String, String>> _quickSymptomDefs = const [
+    {'id': 'High Fever', 'key': 'symptom_high_fever'},
+    {'id': 'Severe Breathlessness', 'key': 'symptom_breathlessness'},
+    {'id': 'Persistent Cough', 'key': 'symptom_cough'},
+    {'id': 'Chest Pain', 'key': 'symptom_chest_pain'},
+    {'id': 'Dizziness / Syncope', 'key': 'symptom_dizziness'},
+    {'id': 'Abdominal Pain', 'key': 'symptom_abdominal_pain'},
+    {'id': 'Severe Headache', 'key': 'symptom_headache'},
+    {'id': 'Vomiting / Diarrhea', 'key': 'symptom_vomiting'},
+  ];
+
+  @override
+  void dispose() {
+    _symptomController.dispose();
+    _notesController.dispose();
+    _tempController.dispose();
+    _systolicController.dispose();
+    _diastolicController.dispose();
+    _pulseController.dispose();
+    _spo2Controller.dispose();
+    super.dispose();
   }
 
-  void _submitAssessment() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _clearError(String key) {
+    if (_fieldErrors.containsKey(key)) {
+      setState(() => _fieldErrors.remove(key));
+    }
+  }
 
-    setState(() => _isProcessing = true);
+  List<String> _parseSymptoms(String text) {
+    return text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  bool _isSymptomSelected(String symptomId) {
+    final currentList = _parseSymptoms(_symptomController.text);
+    return currentList.any((s) => s.toLowerCase() == symptomId.toLowerCase());
+  }
+
+  void _toggleQuickSymptom(String symptomId) {
+    final currentList = _parseSymptoms(_symptomController.text);
+    final existingIndex = currentList.indexWhere(
+      (s) => s.toLowerCase() == symptomId.toLowerCase(),
+    );
+
+    if (existingIndex >= 0) {
+      currentList.removeAt(existingIndex);
+    } else {
+      currentList.add(symptomId);
+    }
+
+    setState(() {
+      _symptomController.text = currentList.join(', ');
+      _clearError('symptom');
+    });
+  }
+
+  bool _validateForm(AppState appState) {
+    final errors = <String, String>{};
+
+    final symptomErr = PatientValidators.validatePrimarySymptom(_symptomController.text);
+    if (symptomErr != null) {
+      errors['symptom'] = appState.translate('err_symptom_required');
+    }
+
+    final durationErr = PatientValidators.validateDurationDays(_durationDays);
+    if (durationErr != null) {
+      errors['duration'] = durationErr;
+    }
+
+    final notesErr = PatientValidators.validateNotes(_notesController.text);
+    if (notesErr != null) {
+      errors['notes'] = notesErr;
+    }
+
+    setState(() {
+      _fieldErrors.clear();
+      if (errors.isNotEmpty) _fieldErrors.addAll(errors);
+    });
+
+    if (errors.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  errors.values.first,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _submitAssessment() async {
     final appState = Provider.of<AppState>(context, listen: false);
     final patient = appState.currentPatient ?? (appState.patients.isNotEmpty ? appState.patients.first : null);
 
     if (patient == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: No patient selected for assessment.')),
+        SnackBar(
+          content: Text(appState.translate('no_patient_selected_msg')),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
       );
-      setState(() => _isProcessing = false);
       return;
     }
+
+    if (!_validateForm(appState)) return;
+
+    setState(() => _isProcessing = true);
 
     final vitals = Vitals(
       temperature: double.tryParse(_tempController.text.trim()),
@@ -57,14 +160,13 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
       diastolicBp: int.tryParse(_diastolicController.text.trim()),
       pulseRate: int.tryParse(_pulseController.text.trim()),
       spo2: int.tryParse(_spo2Controller.text.trim()),
-      bloodGlucose: double.tryParse(_glucoseController.text.trim()),
     );
 
     await appState.createAssessment(
       patientId: patient.id,
       primarySymptom: _symptomController.text.trim(),
-      severity: _severity,
-      durationDays: int.tryParse(_durationController.text.trim()) ?? 1,
+      severity: _selectedSeverity,
+      durationDays: _durationDays,
       vitals: vitals,
       clinicalNotes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
     );
@@ -72,14 +174,80 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     if (!mounted) return;
     setState(() => _isProcessing = false);
 
-    // Decision Branch
     if (!appState.isOnline) {
-      // Saved Offline -> Sync Queue
       Navigator.pushReplacementNamed(context, '/assessment/saved_offline');
     } else {
-      // Uploaded -> AI Triage + Reasoning
       Navigator.pushReplacementNamed(context, '/triage/ai_result');
     }
+  }
+
+  void _showChangePatientDialog(AppState appState) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      appState.translate('select_patient_to_assess'),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.forest),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                Expanded(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: appState.patients.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final p = appState.patients[index];
+                      final isCurrent = appState.currentPatient?.id == p.id;
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isCurrent ? AppColors.forest : AppColors.mintLight,
+                          child: Text(
+                            p.name.isNotEmpty ? p.name[0] : '?',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isCurrent ? Colors.white : AppColors.forest,
+                            ),
+                          ),
+                        ),
+                        title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${p.age} yrs • ${p.gender} • ${p.village}'),
+                        trailing: isCurrent
+                            ? const Icon(Icons.check_circle_rounded, color: AppColors.forest)
+                            : null,
+                        onTap: () {
+                          appState.selectPatient(p);
+                          Navigator.pop(ctx);
+                          setState(() {});
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -90,7 +258,10 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Clinical Assessment & Vitals', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
+        title: Text(
+          appState.translate('clinical_assessment_title'),
+          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18),
+        ),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -99,7 +270,6 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          // Connectivity indicator banner
           Container(
             margin: const EdgeInsets.only(right: 14),
             alignment: Alignment.center,
@@ -122,7 +292,9 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    appState.isOnline ? 'Online Sync' : 'Offline Mode',
+                    appState.isOnline
+                        ? appState.translate('online')
+                        : appState.translate('offline'),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -142,224 +314,371 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Patient Banner
+              // Patient Banner Card
               if (patient != null)
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.mintLight,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.forest.withValues(alpha: 0.2)),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFD6E4DB)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 18,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person_rounded, color: AppColors.forest, size: 20),
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: AppColors.mintLight,
+                        child: Text(
+                          patient.name.isNotEmpty ? patient.name[0] : 'P',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.forest),
+                        ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              patient.name,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textDark),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    patient.name,
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.textDark),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 2),
                             Text(
-                              '${patient.age} yrs • ${patient.gender} • Village: ${patient.village}',
+                              '${patient.age} yrs • ${patient.gender} • ${patient.village}',
                               style: const TextStyle(fontSize: 12, color: AppColors.textMedium, fontWeight: FontWeight.w500),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
+                      if (appState.patients.length > 1)
+                        TextButton(
+                          onPressed: () => _showChangePatientDialog(appState),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.forest,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(50, 30),
+                          ),
+                          child: Text(
+                            appState.translate('change_patient'),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.person_off_rounded, color: Color(0xFFDC2626), size: 32),
+                      const SizedBox(height: 8),
+                      Text(
+                        appState.translate('no_patient_selected_msg'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.forest,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => Navigator.pushReplacementNamed(context, '/new-patient'),
+                        icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                        label: Text(appState.translate('action_register')),
+                      ),
                     ],
                   ),
                 ),
-              const SizedBox(height: 16),
 
-              // Vernacular Voice Input
-              const Text('Voice Input (Vernacular Assistant)', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              VernacularVoiceInput(
-                onTranscriptionResult: _handleVoiceTranscription,
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
-              // Primary Symptom
-              TextFormField(
-                controller: _symptomController,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Primary Clinical Symptoms *',
-                  hintText: 'Describe chief complaint (e.g. High fever, chest pain)',
-                  prefixIcon: Icon(Icons.healing_outlined),
-                  border: OutlineInputBorder(),
+              // Chief Clinical Complaint Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFD6E4DB)),
                 ),
-                validator: (val) => (val == null || val.trim().isEmpty) ? 'Please enter primary symptoms' : null,
-              ),
-              const SizedBox(height: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionHeader(appState.translate('chief_complaint'), Icons.healing_outlined),
+                    const SizedBox(height: 10),
+                    Text(
+                      appState.translate('quick_symptoms_title'),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563)),
+                    ),
+                    const SizedBox(height: 8),
 
-              // Severity & Duration Row
-              Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: DropdownButtonFormField<String>(
-                      initialValue: _severity,
-                      decoration: const InputDecoration(
-                        labelText: 'Severity *',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'MILD', child: Text('🟢 Mild')),
-                        DropdownMenuItem(value: 'MODERATE', child: Text('🟠 Moderate')),
-                        DropdownMenuItem(value: 'SEVERE', child: Text('🔴 Severe')),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setState(() => _severity = val);
+                    // Toggleable Quick Symptoms Chips
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _quickSymptomDefs.map((symItem) {
+                        final symptomId = symItem['id']!;
+                        final symptomLabel = appState.translate(symItem['key']!);
+                        final isContained = _isSymptomSelected(symptomId);
+                        return InkWell(
+                          onTap: () => _toggleQuickSymptom(symptomId),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isContained ? AppColors.forest : AppColors.mintLight,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.forest.withValues(alpha: 0.25)),
+                            ),
+                            child: Text(
+                              symptomLabel,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isContained ? Colors.white : AppColors.forest,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Primary Symptom Input
+                    _buildTextField(
+                      controller: _symptomController,
+                      label: appState.translate('primary_symptom'),
+                      hint: appState.translate('hint_primary_symptom'),
+                      icon: Icons.sick_outlined,
+                      maxLines: 2,
+                      errorText: _fieldErrors['symptom'],
+                      onChanged: (_) {
+                        _clearError('symptom');
+                        setState(() {});
                       },
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 1,
-                    child: TextFormField(
-                      controller: _durationController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Duration (Days) *',
-                        prefixIcon: Icon(Icons.calendar_today_outlined),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (val) => (val == null || val.trim().isEmpty) ? 'Enter days' : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
 
-              // Physiological Vitals Section
-              const Text(
-                'Physiological Vitals',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-              ),
-              const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _tempController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Temp (°F)',
-                        hintText: '98.6',
-                        prefixIcon: Icon(Icons.thermostat),
-                        border: OutlineInputBorder(),
-                      ),
+                    // Severity & Duration Dropdowns Row
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                appState.translate('severity_label'),
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.forest),
+                              ),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedSeverity,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
+                                  ),
+                                ),
+                                items: [
+                                  DropdownMenuItem(value: 'MILD', child: Text(appState.translate('severity_mild'))),
+                                  DropdownMenuItem(value: 'MODERATE', child: Text(appState.translate('severity_moderate'))),
+                                  DropdownMenuItem(value: 'SEVERE', child: Text(appState.translate('severity_severe'))),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _selectedSeverity = val);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                appState.translate('duration_label'),
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.forest),
+                              ),
+                              const SizedBox(height: 6),
+                              DropdownButtonFormField<int>(
+                                initialValue: _durationDays,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
+                                  ),
+                                ),
+                                items: [1, 2, 3, 4, 5, 7, 10, 14].map((d) {
+                                  return DropdownMenuItem(
+                                    value: d,
+                                    child: Text(appState.translate('days_unit', args: {'count': '$d'})),
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) setState(() => _durationDays = val);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _spo2Controller,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'SpO2 (%)',
-                        hintText: '98',
-                        prefixIcon: Icon(Icons.air),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _systolicController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'BP Systolic',
-                        hintText: '120',
-                        prefixIcon: Icon(Icons.speed),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _diastolicController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'BP Diastolic',
-                        hintText: '80',
-                        prefixIcon: Icon(Icons.speed),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _pulseController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Pulse (bpm)',
-                        hintText: '72',
-                        prefixIcon: Icon(Icons.favorite_border),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _glucoseController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Glucose (mg/dL)',
-                        hintText: '100',
-                        prefixIcon: Icon(Icons.water_drop_outlined),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Additional Notes
-              TextFormField(
-                controller: _notesController,
-                decoration: const InputDecoration(
-                  labelText: 'Worker Clinical Observations & Notes',
-                  hintText: 'e.g. Patient appeared dehydrated, walking with difficulty',
-                  prefixIcon: Icon(Icons.notes_outlined),
-                  border: OutlineInputBorder(),
+                  ],
                 ),
               ),
-              const SizedBox(height: 28),
 
-              // Flow Action Button
+              const SizedBox(height: 18),
+
+              // Baseline Vitals Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFD6E4DB)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionHeader(appState.translate('baseline_vitals'), Icons.monitor_heart_outlined),
+                    const SizedBox(height: 14),
+
+                    // Temp & SpO2
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _tempController,
+                            label: appState.translate('temp_label'),
+                            hint: '98.6',
+                            icon: Icons.thermostat_outlined,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            errorText: _fieldErrors['temp'],
+                            onChanged: (_) => _clearError('temp'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _spo2Controller,
+                            label: appState.translate('spo2_label'),
+                            hint: '98',
+                            icon: Icons.air_outlined,
+                            keyboardType: TextInputType.number,
+                            errorText: _fieldErrors['spo2'],
+                            onChanged: (_) => _clearError('spo2'),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // BP Systolic & Diastolic
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _systolicController,
+                            label: appState.translate('bp_systolic'),
+                            hint: '120',
+                            icon: Icons.speed_outlined,
+                            keyboardType: TextInputType.number,
+                            errorText: _fieldErrors['bp'],
+                            onChanged: (_) => _clearError('bp'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _diastolicController,
+                            label: appState.translate('bp_diastolic'),
+                            hint: '80',
+                            icon: Icons.speed_outlined,
+                            keyboardType: TextInputType.number,
+                            errorText: _fieldErrors['bp'],
+                            onChanged: (_) => _clearError('bp'),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Pulse Rate
+                    _buildTextField(
+                      controller: _pulseController,
+                      label: appState.translate('pulse_rate'),
+                      hint: '72',
+                      icon: Icons.favorite_border_rounded,
+                      keyboardType: TextInputType.number,
+                      errorText: _fieldErrors['pulse'],
+                      onChanged: (_) => _clearError('pulse'),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Clinical Notes
+                    _buildTextField(
+                      controller: _notesController,
+                      label: appState.translate('clinical_notes'),
+                      hint: appState.translate('hint_clinical_notes'),
+                      icon: Icons.notes_outlined,
+                      maxLines: 2,
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Submit Button
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.forest,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 2,
                 ),
                 onPressed: _isProcessing ? null : _submitAssessment,
                 icon: _isProcessing
@@ -371,15 +690,88 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                     : Icon(appState.isOnline ? Icons.auto_awesome_rounded : Icons.save_rounded),
                 label: Text(
                   appState.isOnline
-                      ? 'Process Clinical Triage'
-                      : 'Save Assessment to Offline Queue',
+                      ? appState.translate('process_clinical_triage')
+                      : appState.translate('save_assessment_offline'),
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
+
+              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.forest),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.forest),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    TextInputAction textInputAction = TextInputAction.next,
+    int maxLines = 1,
+    void Function(String)? onChanged,
+    String? errorText,
+  }) {
+    final hasError = errorText != null && errorText.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: hasError ? const Color(0xFFDC2626) : AppColors.forest,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          maxLines: maxLines,
+          onChanged: onChanged,
+          style: const TextStyle(fontSize: 14, color: AppColors.textDark, fontWeight: FontWeight.w500),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
+            prefixIcon: Icon(icon, color: hasError ? const Color(0xFFDC2626) : AppColors.forest, size: 20),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: hasError ? const Color(0xFFDC2626) : const Color(0xFFB8C8BD), width: 1.2),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: hasError ? const Color(0xFFDC2626) : const Color(0xFFB8C8BD), width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: hasError ? const Color(0xFFDC2626) : AppColors.forest, width: 1.8),
+            ),
+            errorText: hasError ? errorText : null,
+            errorStyle: const TextStyle(fontSize: 11, color: Color(0xFFDC2626), fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 }

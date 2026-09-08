@@ -28,18 +28,24 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Complete Follow-Up for ${task.patientName}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: Text(
+          appState.translate('complete_task_for', args: {'name': task.patientName}),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Enter visit observations & patient response:', style: TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
+            Text(
+              appState.translate('visit_notes_prompt'),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: notesController,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'e.g. Blood pressure 120/80, taking morning medication as advised.',
+                hintText: appState.translate('visit_notes_hint'),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 filled: true,
                 fillColor: const Color(0xFFF9FAFB),
@@ -50,7 +56,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text(appState.translate('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -65,12 +71,12 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✅ Follow-up completed for ${task.patientName}'),
+                  content: Text(appState.translate('task_completed_msg', args: {'name': task.patientName})),
                   backgroundColor: const Color(0xFF16A34A),
                 ),
               );
             },
-            child: const Text('Mark Complete'),
+            child: Text(appState.translate('mark_complete')),
           ),
         ],
       ),
@@ -83,12 +89,15 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626)),
-            SizedBox(width: 8),
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626)),
+            const SizedBox(width: 8),
             Expanded(
-              child: Text('Escalate to MO', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF991B1B))),
+              child: Text(
+                appState.translate('escalate_to_mo'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+              ),
             ),
           ],
         ),
@@ -96,13 +105,16 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Escalate ${task.patientName} directly to the Medical Officer for urgent intervention.', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
+            Text(
+              appState.translate('escalate_mo_desc', args: {'name': task.patientName}),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: reasonController,
               maxLines: 3,
               decoration: InputDecoration(
-                hintText: 'Enter reason for escalation...',
+                hintText: appState.translate('escalate_reason_hint'),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                 filled: true,
                 fillColor: const Color(0xFFFEF2F2),
@@ -113,7 +125,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text(appState.translate('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -128,12 +140,12 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('🚨 Escalated ${task.patientName} to Medical Officer!'),
+                  content: Text(appState.translate('task_escalated_msg', args: {'name': task.patientName})),
                   backgroundColor: const Color(0xFFDC2626),
                 ),
               );
             },
-            child: const Text('Escalate Now'),
+            child: Text(appState.translate('escalate_now')),
           ),
         ],
       ),
@@ -172,7 +184,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Follow-up Care Gaps', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('referral_inbox_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -185,13 +197,13 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
             color: Colors.white,
             child: Row(
               children: [
-                _buildMetricCard('All Tasks', '${allTasks.length}', const Color(0xFF0284C7), const Color(0xFFE0F2FE)),
+                _buildMetricCard(appState.translate('metric_all_tasks'), '${allTasks.length}', const Color(0xFF0284C7), const Color(0xFFE0F2FE)),
                 const SizedBox(width: 8),
-                _buildMetricCard('Overdue', '$overdueCount', const Color(0xFFDC2626), const Color(0xFFFEE2E2)),
+                _buildMetricCard(appState.translate('filter_overdue'), '$overdueCount', const Color(0xFFDC2626), const Color(0xFFFEE2E2)),
                 const SizedBox(width: 8),
-                _buildMetricCard('Due Today', '$dueTodayCount', const Color(0xFFD97706), const Color(0xFFFEF3C7)),
+                _buildMetricCard(appState.translate('filter_today'), '$dueTodayCount', const Color(0xFFD97706), const Color(0xFFFEF3C7)),
                 const SizedBox(width: 8),
-                _buildMetricCard('Completed', '$completedCount', const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
+                _buildMetricCard(appState.translate('filter_completed'), '$completedCount', const Color(0xFF16A34A), const Color(0xFFDCFCE7)),
               ],
             ),
           ),
@@ -204,7 +216,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
               controller: _searchController,
               onChanged: (val) => setState(() => _searchQuery = val.trim()),
               decoration: InputDecoration(
-                hintText: 'Search by patient name, reason, or condition...',
+                hintText: appState.translate('search_tasks_hint'),
                 hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
                 prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.forest),
                 suffixIcon: _searchQuery.isNotEmpty
@@ -232,15 +244,15 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _filterChip('ALL', 'All (${allTasks.length})'),
+                  _filterChip('ALL', appState.translate('filter_all_count', args: {'count': '${allTasks.length}'})),
                   const SizedBox(width: 8),
-                  _filterChip('OVERDUE', 'Overdue ($overdueCount)'),
+                  _filterChip('OVERDUE', appState.translate('filter_overdue_count', args: {'count': '$overdueCount'})),
                   const SizedBox(width: 8),
-                  _filterChip('TODAY', 'Due Today ($dueTodayCount)'),
+                  _filterChip('TODAY', appState.translate('filter_today_count', args: {'count': '$dueTodayCount'})),
                   const SizedBox(width: 8),
-                  _filterChip('PENDING', 'Active (${allTasks.length - completedCount})'),
+                  _filterChip('PENDING', appState.translate('filter_active_count', args: {'count': '${allTasks.length - completedCount}'})),
                   const SizedBox(width: 8),
-                  _filterChip('COMPLETED', 'Done ($completedCount)'),
+                  _filterChip('COMPLETED', appState.translate('filter_completed_count', args: {'count': '$completedCount'})),
                 ],
               ),
             ),
@@ -256,11 +268,15 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                       children: [
                         const Icon(Icons.check_circle_outline_rounded, size: 56, color: Color(0xFF9CA3AF)),
                         const SizedBox(height: 12),
-                        Text(
-                          _searchQuery.isNotEmpty
-                              ? 'No follow-up tasks match "$_searchQuery"'
-                              : 'No follow-up tasks in "$_filter"',
-                          style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w500),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _searchQuery.isNotEmpty
+                                ? appState.translate('no_tasks_match', args: {'query': _searchQuery})
+                                : appState.translate('no_tasks_found'),
+                            style: const TextStyle(color: Color(0xFF6B7280), fontWeight: FontWeight.w500),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ],
                     ),
@@ -303,7 +319,9 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      isCompleted ? 'COMPLETED' : (isOverdue ? 'OVERDUE' : 'DUE SOON'),
+                                      isCompleted
+                                          ? appState.translate('status_completed')
+                                          : (isOverdue ? appState.translate('status_overdue') : appState.translate('status_due_soon')),
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w800,
@@ -321,7 +339,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    'Due: ${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year}',
+                                    appState.translate('due_date_label', args: {'date': '${task.dueDate.day}/${task.dueDate.month}/${task.dueDate.year}'}),
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: isOverdue ? FontWeight.bold : FontWeight.w500,
@@ -432,7 +450,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
                                       onPressed: () => _showEscalateDialog(appState, task),
-                                      child: const Text('Escalate', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      child: Text(appState.translate('btn_escalate'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                     ),
                                     const SizedBox(width: 8),
                                     // Complete Button
@@ -446,7 +464,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                       ),
                                       onPressed: () => _showCompleteDialog(appState, task),
-                                      child: const Text('Done', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      child: Text(appState.translate('btn_done'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                     ),
                                   ] else ...[
                                     Container(
@@ -455,12 +473,12 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                         color: const Color(0xFFDCFCE7),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.check, size: 14, color: Color(0xFF166534)),
-                                          SizedBox(width: 4),
-                                          Text('Completed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534))),
+                                          const Icon(Icons.check, size: 14, color: Color(0xFF166534)),
+                                          const SizedBox(width: 4),
+                                          Text(appState.translate('status_completed'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534))),
                                         ],
                                       ),
                                     ),

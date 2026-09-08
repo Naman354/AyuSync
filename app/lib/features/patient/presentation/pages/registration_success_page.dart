@@ -33,14 +33,14 @@ class RegistrationSuccessPage extends StatelessWidget {
                         children: [
                           IconButton(
                             icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
-                            tooltip: 'Return to Dashboard',
+                            tooltip: appState.translate('return_to_dashboard'),
                             onPressed: () => Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false),
                           ),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Patient Registration',
+                              appState.translate('patient_registration_title'),
                               textAlign: TextAlign.center,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.white,
@@ -74,11 +74,11 @@ class RegistrationSuccessPage extends StatelessWidget {
                       const SizedBox(height: 20),
 
                       // Success Title
-                      const Text(
-                        'Registration Successful',
+                      Text(
+                        appState.translate('reg_success_title'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 26,
+                        style: const TextStyle(
+                          fontSize: 24,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
                           letterSpacing: -0.5,
@@ -86,7 +86,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Patient ID: ${patient.id}',
+                        appState.translate('patient_id_label', args: {'id': patient.id}),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -121,8 +121,8 @@ class RegistrationSuccessPage extends StatelessWidget {
                             Flexible(
                               child: Text(
                                 isOnline
-                                    ? 'Synchronized with Central Health Registry'
-                                    : 'Saved locally in phone database · Queued to sync',
+                                    ? appState.translate('reg_synced_desc')
+                                    : appState.translate('reg_offline_desc'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -158,7 +158,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '${patient.age} yrs • ${patient.gender} • Village: ${patient.village}',
+                              '${patient.age} yrs • ${patient.gender} • ${appState.translate('village_prefix', args: {'village': patient.village})}',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -168,7 +168,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Phone: ${patient.phone}',
+                              appState.translate('phone_prefix', args: {'phone': patient.phone}),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.white.withValues(alpha: 0.85),
@@ -183,7 +183,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  'ABHA ID: ${patient.abhaId}',
+                                  appState.translate('abha_prefix', args: {'abha': patient.abhaId!}),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -214,15 +214,18 @@ class RegistrationSuccessPage extends StatelessWidget {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             elevation: 2,
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(
-                                'Proceed to AI Triage & Referral',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                              Flexible(
+                                child: Text(
+                                  appState.translate('proceed_to_triage'),
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                              SizedBox(width: 8),
-                              Icon(Icons.arrow_forward_rounded, size: 20),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward_rounded, size: 20),
                             ],
                           ),
                         ),
@@ -239,9 +242,10 @@ class RegistrationSuccessPage extends StatelessWidget {
                             Navigator.pushReplacementNamed(context, '/new-patient');
                           },
                           icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
-                          label: const Text(
-                            'Register Another Patient',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                          label: Text(
+                            appState.translate('register_another'),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                            overflow: TextOverflow.ellipsis,
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.mintLight,
@@ -264,13 +268,14 @@ class RegistrationSuccessPage extends StatelessWidget {
                             side: const BorderSide(color: Colors.white, width: 1.5),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
-                          child: const Text(
-                            'Return to Dashboard',
-                            style: TextStyle(
+                          child: Text(
+                            appState.translate('return_to_dashboard'),
+                            style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),

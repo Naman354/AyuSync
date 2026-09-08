@@ -14,7 +14,7 @@ class SavedOfflinePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Saved to Offline Storage', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
+        title: Text(appState.translate('saved_offline_title'), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -42,16 +42,16 @@ class SavedOfflinePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 24),
-              const Text(
-                'Assessment Saved Offline',
+              Text(
+                appState.translate('assessment_saved_offline'),
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
               const SizedBox(height: 10),
-              const Text(
-                'Your assessment data is safely recorded in the local phone database. No internet connection was detected.',
+              Text(
+                appState.translate('assessment_saved_offline_desc'),
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Color(0xFF4B5563), height: 1.4),
+                style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563), height: 1.4),
               ),
               const SizedBox(height: 24),
 
@@ -78,10 +78,10 @@ class SavedOfflinePage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Offline Sync Queue', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textDark)),
+                          Text(appState.translate('sync_queue_title'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textDark)),
                           const SizedBox(height: 2),
                           Text(
-                            '$pendingCount items awaiting mobile network',
+                            appState.translate('items_awaiting_sync', args: {'count': '$pendingCount'}),
                             style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                           ),
                         ],
@@ -105,9 +105,9 @@ class SavedOfflinePage extends StatelessWidget {
                   Navigator.pushReplacementNamed(context, '/sync_queue');
                 },
                 icon: const Icon(Icons.sync_rounded),
-                label: const Text(
-                  'View Offline Sync Queue',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                label: Text(
+                  appState.translate('view_sync_queue'),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 12),
@@ -123,9 +123,9 @@ class SavedOfflinePage extends StatelessWidget {
                   Navigator.pushReplacementNamed(context, '/dashboard');
                 },
                 icon: const Icon(Icons.home_outlined),
-                label: const Text(
-                  'Return to Home Dashboard',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                label: Text(
+                  appState.translate('return_to_dashboard'),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                 ),
               ),
             ],

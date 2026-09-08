@@ -55,8 +55,8 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
       SnackBar(
         content: Text(
           appState.isOnline
-              ? '✅ Follow-up visit synced to Doctor Web Dashboard!'
-              : '💾 Follow-up visit recorded offline and queued in SQLite.',
+              ? appState.translate('visit_synced_online')
+              : appState.translate('visit_saved_offline'),
         ),
         backgroundColor: AppColors.forest,
       ),
@@ -74,7 +74,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Record Follow-up Home Visit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('record_visit_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -100,7 +100,9 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Home Visit for: ${task?.patientName ?? "Patient"}',
+                        appState.translate('home_visit_for', args: {
+                          'name': task?.patientName ?? appState.translate('patient_label'),
+                        }),
                         style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
                       ),
                     ),
@@ -118,8 +120,11 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                   side: const BorderSide(color: Color(0xFFE5E7EB)),
                 ),
                 child: SwitchListTile(
-                  title: const Text('Medication Adherence Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Is patient consuming prescribed medications on schedule?'),
+                  title: Text(
+                    appState.translate('med_adherence_title'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: Text(appState.translate('med_adherence_sub')),
                   value: _adherenceConfirmed,
                   activeThumbColor: AppColors.forest,
                   onChanged: (val) => setState(() => _adherenceConfirmed = val),
@@ -128,7 +133,10 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               const SizedBox(height: 16),
 
               // Follow-up Vitals
-              const Text('Follow-up Vitals Recorded', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text(
+                appState.translate('followup_vitals_title'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -137,11 +145,11 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                       controller: _systolicController,
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'BP Systolic',
+                      decoration: InputDecoration(
+                        labelText: appState.translate('bp_systolic'),
                         hintText: '120',
-                        prefixIcon: Icon(Icons.speed),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.speed),
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ),
@@ -151,11 +159,11 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                       controller: _diastolicController,
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                        labelText: 'BP Diastolic',
+                      decoration: InputDecoration(
+                        labelText: appState.translate('bp_diastolic'),
                         hintText: '80',
-                        prefixIcon: Icon(Icons.speed),
-                        border: OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.speed),
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ),
@@ -166,11 +174,11 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                 controller: _pulseController,
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Pulse Rate (bpm)',
+                decoration: InputDecoration(
+                  labelText: appState.translate('pulse_rate'),
                   hintText: '72',
-                  prefixIcon: Icon(Icons.favorite_border),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.favorite_border),
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 16),
@@ -179,13 +187,15 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               TextFormField(
                 controller: _notesController,
                 maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'ASHA Home Visit Observations *',
-                  hintText: 'Describe patient recovery, symptoms, and advice given...',
-                  prefixIcon: Icon(Icons.note_alt_outlined),
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: appState.translate('visit_obs_label'),
+                  hintText: appState.translate('visit_obs_hint'),
+                  prefixIcon: const Icon(Icons.note_alt_outlined),
+                  border: const OutlineInputBorder(),
                 ),
-                validator: (val) => (val == null || val.trim().isEmpty) ? 'Please record visit notes' : null,
+                validator: (val) => (val == null || val.trim().isEmpty)
+                    ? appState.translate('err_visit_notes')
+                    : null,
               ),
               const SizedBox(height: 28),
 
@@ -206,9 +216,9 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
                     : const Icon(Icons.check_circle_outline),
-                label: const Text(
-                  'Submit & Complete Follow-up Task',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                label: Text(
+                  appState.translate('submit_complete_task'),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

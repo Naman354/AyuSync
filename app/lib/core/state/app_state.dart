@@ -100,7 +100,6 @@ class AppState extends ChangeNotifier {
       case AppLanguage.marathi:
         return const Locale('mr', 'IN');
       case AppLanguage.english:
-      default:
         return const Locale('en', 'US');
     }
   }

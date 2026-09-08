@@ -14,21 +14,26 @@ class PatientHistoryPage extends StatelessWidget {
     if (patient == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Patient Health History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          title: Text(appState.translate('patient_history_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           backgroundColor: Colors.white,
           foregroundColor: AppColors.forest,
           elevation: 0,
         ),
-        body: const Center(child: Text('No patient selected')),
+        body: Center(child: Text(appState.translate('no_patient_selected'))),
       );
     }
 
     final historyList = appState.getAssessmentsForPatient(patient.id);
+    final genderText = patient.gender.toLowerCase() == 'male'
+        ? appState.translate('gender_male')
+        : (patient.gender.toLowerCase() == 'female'
+            ? appState.translate('gender_female')
+            : appState.translate('gender_other'));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Patient Health History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('patient_history_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -56,7 +61,14 @@ class PatientHistoryPage extends StatelessWidget {
                     children: [
                       Text(patient.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                       const SizedBox(height: 2),
-                      Text('${patient.age} yrs • ${patient.gender} • Village: ${patient.village}', style: const TextStyle(color: Color(0xFF4B5563))),
+                      Text(
+                        appState.translate('patient_details_subtitle', args: {
+                          'age': '${patient.age}',
+                          'gender': genderText,
+                          'village': patient.village,
+                        }),
+                        style: const TextStyle(color: Color(0xFF4B5563)),
+                      ),
                       Text(
                         'ABHA: ${patient.abhaId ?? "Not Linked"}',
                         style: const TextStyle(fontSize: 12, color: AppColors.forest, fontWeight: FontWeight.w600),
@@ -75,12 +87,18 @@ class PatientHistoryPage extends StatelessWidget {
               children: [
                 const Icon(Icons.history, size: 18, color: Color(0xFF1E293B)),
                 const SizedBox(width: 6),
-                const Text(
-                  'Longitudinal Clinical Encounters',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                Expanded(
+                  child: Text(
+                    appState.translate('encounters_title'),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
-                Text('${historyList.length} Records', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                const SizedBox(width: 8),
+                Text(
+                  appState.translate('records_count', args: {'count': '${historyList.length}'}),
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
               ],
             ),
           ),
@@ -94,9 +112,19 @@ class PatientHistoryPage extends StatelessWidget {
                       children: [
                         Icon(Icons.assignment_late_outlined, size: 56, color: Colors.grey.shade400),
                         const SizedBox(height: 12),
-                        const Text('No prior assessment records for this citizen.'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            appState.translate('no_encounters_yet'),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        const Text('Start a fresh triage session below.', style: TextStyle(color: Colors.grey)),
+                        Text(
+                          appState.translate('start_fresh_triage_sub'),
+                          style: const TextStyle(color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ),
                   )
@@ -136,7 +164,7 @@ class PatientHistoryPage extends StatelessWidget {
                                       ),
                                     ),
                                     child: Text(
-                                      'Severity: ${asm.severity}',
+                                      appState.translate('severity_chip_label', args: {'severity': asm.severity}),
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
@@ -211,9 +239,9 @@ class PatientHistoryPage extends StatelessWidget {
                 Navigator.pushNamed(context, '/assessment/form');
               },
               icon: const Icon(Icons.add_chart_rounded),
-              label: const Text(
-                'Start Clinical Assessment & Vitals',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              label: Text(
+                appState.translate('start_assessment_vitals'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
           ),
