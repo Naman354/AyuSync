@@ -23,9 +23,11 @@ import 'features/triage/presentation/pages/case_status_page.dart';
 import 'features/followup/presentation/pages/followup_inbox_page.dart';
 import 'features/followup/presentation/pages/followup_task_details_page.dart';
 import 'features/followup/presentation/pages/record_followup_page.dart';
+import 'core/sync/sync_engine.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SyncEngine().init();
   runApp(
     MultiProvider(
       providers: [

@@ -12,20 +12,27 @@ class FacilityRoutingPage extends StatefulWidget {
 
 class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
   Facility? _selectedFacility;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
     final appState = Provider.of<AppState>(context, listen: false);
-    _selectedFacility = appState.facilities[1]; // Default to PHC
+    if (appState.facilities.isNotEmpty) {
+      _selectedFacility = appState.facilities.length > 1 ? appState.facilities[1] : appState.facilities.first;
+    }
   }
 
-  void _handleSubmitReferral() {
+  void _handleSubmitReferral() async {
+    setState(() => _isSubmitting = true);
     final appState = Provider.of<AppState>(context, listen: false);
     if (_selectedFacility != null) {
       appState.selectFacility(_selectedFacility!);
     }
-    appState.submitReferralCase();
+    await appState.submitReferralCaseAsync();
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
 
     // Navigate to 15 Case Submitted as per Figma flow
     Navigator.pushReplacementNamed(context, '/triage/case_submitted');
@@ -37,10 +44,15 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
     final facilities = appState.facilities;
     final urgency = appState.currentTriageResult?.confirmedUrgency ?? 'PRIORITY';
 
+    // Ensure selection defaults if empty
+    if (_selectedFacility == null && facilities.isNotEmpty) {
+      _selectedFacility = facilities.first;
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('14 Smart Facility Routing'),
+        title: const Text('Choose Health Facility'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -57,15 +69,19 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                   children: [
                     const Icon(Icons.alt_route, color: Color(0xFF2563EB)),
                     const SizedBox(width: 8),
-                    Text(
-                      'Routing Algorithm: $urgency Level Match',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    Expanded(
+                      child: Text(
+                        'Recommended Centers for $urgency Urgency',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Facilities ranked by live readiness, distance, and specialist availability.',
+                  'Centers sorted by distance, available doctors, and current waiting time.',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                 ),
               ],
@@ -85,7 +101,7 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
 
                 return Card(
                   elevation: 0,
-                  color: isSelected ? Colors.blue.shade50.withOpacity(0.5) : Colors.white,
+                  color: isSelected ? Colors.blue.shade50.withValues(alpha: 0.5) : Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(
@@ -135,13 +151,28 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                                   ],
                                 ),
                               ),
-                              Radio<String>(
-                                value: fac.id,
-                                groupValue: _selectedFacility?.id,
-                                activeColor: const Color(0xFF2563EB),
-                                onChanged: (val) {
-                                  setState(() => _selectedFacility = fac);
-                                },
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xFF2563EB) : Colors.grey.shade400,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: isSelected
+                                    ? Center(
+                                        child: Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Color(0xFF2563EB),
+                                          ),
+                                        ),
+                                      )
+                                    : null,
                               ),
                             ],
                           ),
@@ -165,7 +196,7 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Freshness: ${fac.freshness}',
+                            'Status: ${fac.freshness}',
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                           ),
                         ],
@@ -184,7 +215,7 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),
@@ -197,11 +228,23 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              onPressed: _selectedFacility == null ? null : _handleSubmitReferral,
-              icon: const Icon(Icons.send_rounded),
-              label: Text(
-                'Submit Referral Case to ${_selectedFacility?.type ?? "Facility"}',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              onPressed: (_selectedFacility == null || _isSubmitting) ? null : _handleSubmitReferral,
+              icon: _isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded),
+              label: Flexible(
+                child: Text(
+                  _isSubmitting
+                      ? 'Submitting Referral...'
+                      : 'Send Patient Referral to ${_selectedFacility?.type ?? "Facility"}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ),
@@ -214,9 +257,9 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,

@@ -29,6 +29,41 @@ class FollowUpTask {
     this.completedAt,
   });
 
+  factory FollowUpTask.fromBackendFollowUp(
+    Map<String, dynamic> map, {
+    String? patientName,
+    String? patientPhone,
+    String? doctorName,
+    String? facilityName,
+  }) {
+    final due = map['dueDate'] != null
+        ? DateTime.tryParse(map['dueDate'].toString()) ?? DateTime.now().add(const Duration(days: 1))
+        : DateTime.now().add(const Duration(days: 1));
+
+    String currentStatus = map['status']?.toString() ?? 'PENDING';
+    if (currentStatus == 'PENDING' && due.isBefore(DateTime.now())) {
+      currentStatus = 'OVERDUE';
+    }
+
+    final reason = map['reason']?.toString() ?? 'Follow-up clinical assessment & treatment compliance';
+
+    return FollowUpTask(
+      id: map['id']?.toString() ?? 'TASK-${DateTime.now().millisecondsSinceEpoch}',
+      patientId: map['patientId']?.toString() ?? '',
+      patientName: patientName ?? map['patientName']?.toString() ?? 'Citizen Patient',
+      patientPhone: patientPhone ?? map['patientPhone']?.toString() ?? '+91 98765 43210',
+      doctorName: doctorName ?? 'Dr. Deshmukh',
+      doctorFacility: facilityName ?? 'District Health Centre',
+      taskDescription: reason,
+      instructions: 'Check patient vitals, verify medication adherence, and record home visit observations.',
+      prescribedMedicines: ['Prescribed Medication (Daily dosage)'],
+      dueDate: due,
+      status: currentStatus,
+      visitNotes: map['visitNotes']?.toString(),
+      completedAt: map['completedAt'] != null ? DateTime.tryParse(map['completedAt'].toString()) : null,
+    );
+  }
+
   FollowUpTask copyWith({
     String? status,
     String? visitNotes,

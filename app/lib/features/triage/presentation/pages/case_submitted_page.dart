@@ -13,7 +13,7 @@ class CaseSubmittedPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('15 Case Submitted'),
+        title: const Text('Referral Sent'),
         backgroundColor: const Color(0xFF16A34A), // Success green
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
@@ -39,13 +39,13 @@ class CaseSubmittedPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Referral Case Dispatched!',
+                'Referral Sent Successfully!',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               Text(
-                'Case has been transmitted to ${referral?.facility.name ?? "Receiving Facility"} and placed on Doctor Live Queue.',
+                'Referral has been sent to ${referral?.facility.name ?? "Receiving Facility"} and is now visible to the doctor on duty.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey.shade700, height: 1.4),
               ),
@@ -61,7 +61,7 @@ class CaseSubmittedPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    const Text('Official Referral Tracking ID', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    const Text('Referral ID', style: TextStyle(color: Colors.grey, fontSize: 12)),
                     const SizedBox(height: 4),
                     Text(
                       referral?.referralId ?? 'REF-889412',
@@ -101,7 +101,7 @@ class CaseSubmittedPage extends StatelessWidget {
                 },
                 icon: const Icon(Icons.receipt_long),
                 label: const Text(
-                  'View 19 Case Status / Confirmation',
+                  'View Referral Status & Timeline',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),

@@ -27,7 +27,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('06 Follow-up Inbox'),
+        title: const Text('Follow-Up Tasks'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -37,32 +37,39 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.white,
-            child: Row(
-              children: [
-                _filterChip('ALL', 'All (${allTasks.length})'),
-                const SizedBox(width: 8),
-                _filterChip('PENDING', 'Pending'),
-                const SizedBox(width: 8),
-                _filterChip('OVERDUE', 'Overdue'),
-                const SizedBox(width: 8),
-                _filterChip('COMPLETED', 'Done'),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip('ALL', 'All (${allTasks.length})'),
+                  const SizedBox(width: 8),
+                  _filterChip('PENDING', 'Pending'),
+                  const SizedBox(width: 8),
+                  _filterChip('OVERDUE', 'Overdue'),
+                  const SizedBox(width: 8),
+                  _filterChip('COMPLETED', 'Done'),
+                ],
+              ),
             ),
           ),
           const Divider(height: 1),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
             child: Row(
               children: [
-                const Icon(Icons.arrow_downward, size: 16, color: Color(0xFF2563EB)),
-                const SizedBox(width: 6),
-                const Text(
-                  'Doctor Counter-Referral Assignments',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                Icon(Icons.arrow_downward, size: 16, color: Color(0xFF2563EB)),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Doctor Instructions & Follow-up Tasks',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
-                const Text('Tap for 17 Details', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                SizedBox(width: 8),
+                Text('Tap to view details', style: TextStyle(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ),
@@ -162,9 +169,13 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                   children: [
                                     const Icon(Icons.local_hospital_outlined, size: 14, color: Colors.grey),
                                     const SizedBox(width: 4),
-                                    Text(
-                                      'Assigned by: ${task.doctorName} (${task.doctorFacility})',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                    Expanded(
+                                      child: Text(
+                                        'Assigned by: ${task.doctorName} (${task.doctorFacility})',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                   ],
                                 ),

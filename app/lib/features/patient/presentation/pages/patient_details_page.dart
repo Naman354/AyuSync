@@ -20,7 +20,7 @@ class PatientDetailsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('07 Patient Details'),
+        title: const Text('Patient Details'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -106,7 +106,7 @@ class PatientDetailsPage extends StatelessWidget {
                     _buildInfoRow(
                       Icons.cloud_done_outlined,
                       'Sync Status',
-                      patient.isSynced ? 'Synced to Cloud' : 'Queued Locally (SQLite)',
+                      patient.isSynced ? 'Synced to Cloud' : 'Saved on Device (Waiting to Sync)',
                       isSync: true,
                       synced: patient.isSynced,
                     ),
@@ -128,9 +128,13 @@ class PatientDetailsPage extends StatelessWidget {
                 Navigator.pushNamed(context, '/assessment/form');
               },
               icon: const Icon(Icons.medical_services_outlined),
-              label: const Text(
-                'Proceed to 08 Symptoms + Vitals',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              label: const Flexible(
+                child: Text(
+                  'Start Health Checkup (Symptoms & Vitals)',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             const SizedBox(height: 12),

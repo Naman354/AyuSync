@@ -59,7 +59,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
       bloodGlucose: double.tryParse(_glucoseController.text.trim()),
     );
 
-    appState.createAssessment(
+    await appState.createAssessmentAsync(
       patientId: patient.id,
       primarySymptom: _symptomController.text.trim(),
       severity: _severity,
@@ -68,7 +68,6 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
       clinicalNotes: _notesController.text.trim().isNotEmpty ? _notesController.text.trim() : null,
     );
 
-    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     setState(() => _isProcessing = false);
 
@@ -90,7 +89,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('08 Symptoms + Vitals'),
+        title: const Text('Symptoms & Health Readings'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
         actions: [
@@ -144,7 +143,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
               const SizedBox(height: 16),
 
               // Vernacular Voice Input
-              const Text('Voice Input (Vernacular Assistant)', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Voice Input (Speak in your language)', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               VernacularVoiceInput(
                 onTranscriptionResult: _handleVoiceTranscription,
@@ -156,7 +155,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                 controller: _symptomController,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  labelText: 'Primary Clinical Symptoms *',
+                  labelText: 'Main Symptoms / Problems *',
                   hintText: 'Describe chief complaint (e.g. High fever, chest pain)',
                   prefixIcon: Icon(Icons.healing_outlined),
                   border: OutlineInputBorder(),
@@ -171,7 +170,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                   Expanded(
                     flex: 1,
                     child: DropdownButtonFormField<String>(
-                      value: _severity,
+                      initialValue: _severity,
                       decoration: const InputDecoration(
                         labelText: 'Severity *',
                         border: OutlineInputBorder(),
@@ -206,7 +205,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
 
               // Physiological Vitals Section
               const Text(
-                'Physiological Vitals',
+                'Vital Signs (Health Readings)',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
               const SizedBox(height: 12),
@@ -308,7 +307,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
               TextFormField(
                 controller: _notesController,
                 decoration: const InputDecoration(
-                  labelText: 'Worker Clinical Observations & Notes',
+                  labelText: 'Your Observations & Notes',
                   hintText: 'e.g. Patient appeared dehydrated, walking with difficulty',
                   prefixIcon: Icon(Icons.notes_outlined),
                   border: OutlineInputBorder(),
@@ -332,11 +331,15 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
                     : Icon(appState.isOnline ? Icons.auto_awesome : Icons.save_alt),
-                label: Text(
-                  appState.isOnline
-                      ? 'Process Triage → 12 AI Triage + Reasoning'
-                      : 'Save Offline → 10 Saved Offline Queue',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                label: Flexible(
+                  child: Text(
+                    appState.isOnline
+                        ? 'Analyze Symptoms & Get Guidance'
+                        : 'Save Offline (Upload Later)',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],

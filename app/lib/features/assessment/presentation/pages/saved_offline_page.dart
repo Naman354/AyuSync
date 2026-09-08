@@ -13,7 +13,7 @@ class SavedOfflinePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('10 Saved Offline'),
+        title: const Text('Saved Offline'),
         backgroundColor: const Color(0xFFD97706), // Amber warning
         foregroundColor: Colors.white,
       ),
@@ -44,7 +44,7 @@ class SavedOfflinePage extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Data has been securely stored in the local SQLite database. It has been placed in the offline mutation queue.',
+                'This record is saved safely on your device. It will automatically upload to the hospital when internet is restored.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey.shade700, height: 1.4),
               ),
@@ -92,7 +92,7 @@ class SavedOfflinePage extends StatelessWidget {
                 },
                 icon: const Icon(Icons.sync),
                 label: const Text(
-                  'Go to 11 Sync Queue',
+                  'View Offline Upload Queue',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),

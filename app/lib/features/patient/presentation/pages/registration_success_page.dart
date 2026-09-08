@@ -10,12 +10,10 @@ class RegistrationSuccessPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-
     return Scaffold(
-      backgroundColor: const Color(0xFF2E8B57), // Exact Emerald / Medium Sea Green from Image 5
+      backgroundColor: const Color(0xFF2E8B57), // Exact Emerald / Medium Sea Green
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
           child: Column(
             children: [
@@ -41,52 +39,53 @@ class RegistrationSuccessPage extends StatelessWidget {
                 ],
               ),
 
-              const Spacer(flex: 2),
+              const SizedBox(height: 28),
 
               // Large White Circle with Checkmark
               Container(
-                width: 140,
-                height: 140,
+                width: 120,
+                height: 120,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 6),
+                  border: Border.all(color: Colors.white, width: 5),
                 ),
                 child: const Center(
                   child: Icon(
                     Icons.check_rounded,
                     color: Colors.white,
-                    size: 80,
+                    size: 72,
                   ),
                 ),
               ),
 
-              const SizedBox(height: 36),
+              const SizedBox(height: 24),
 
               // "Congratulation" Title
               const Text(
-                'Congratulation',
+                'Congratulations!',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 28,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   letterSpacing: -0.5,
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // "Patient is Successfully Registered" Outlined Card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: Colors.white, width: 1.5),
                 ),
                 child: Column(
                   children: [
                     const Text(
-                      'Patient is Successfully Registered',
+                      'Patient Registered Successfully',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -98,20 +97,27 @@ class RegistrationSuccessPage extends StatelessWidget {
                     Text(
                       '${patient.name} (${patient.gender}, ${patient.age} yrs) · ${patient.village}',
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Colors.white.withValues(alpha: 0.95),
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (patient.abhaId != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'ABHA: ${patient.abhaId}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white.withValues(alpha: 0.8),
+                    if (patient.abhaId != null && patient.abhaId!.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'ABHA: ${patient.abhaId}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -119,15 +125,15 @@ class RegistrationSuccessPage extends StatelessWidget {
                 ),
               ),
 
-              const Spacer(flex: 3),
+              const SizedBox(height: 36),
 
-              // Action 1: Proceed to AI Triage & Clinical Reasoning
+              // Action 1: Proceed to Health Urgency & Guidance
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
                   onPressed: () {
-                    appState.setCurrentPatient(patient);
+                    context.read<AppState>().setCurrentPatient(patient);
                     Navigator.pushNamed(context, '/ai-triage');
                   },
                   style: ElevatedButton.styleFrom(
@@ -139,9 +145,13 @@ class RegistrationSuccessPage extends StatelessWidget {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        'Proceed to AI Triage & Referral',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      Flexible(
+                        child: Text(
+                          'Check Health Urgency & Guidance',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       SizedBox(width: 8),
                       Icon(Icons.arrow_forward_rounded, size: 20),
@@ -173,7 +183,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
             ],
           ),
         ),

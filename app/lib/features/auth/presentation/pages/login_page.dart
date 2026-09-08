@@ -11,7 +11,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _idController = TextEditingController(text: 'kavita.asha@ayusync.in');
+  final _idController = TextEditingController();
   final _passwordController = TextEditingController(text: 'password123');
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -24,45 +24,48 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_idController.text.trim().isEmpty ||
         _passwordController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your ASHA ID and Password')),
+        const SnackBar(content: Text('Please enter your Mobile Number and Password')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
     final appState = Provider.of<AppState>(context, listen: false);
-    appState.login(_idController.text.trim(), _passwordController.text.trim());
+    await appState.login(_idController.text.trim(), _passwordController.text.trim());
 
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      Navigator.pushReplacementNamed(context, '/home');
-    });
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (appState.lastErrorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(appState.lastErrorMessage!),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+    }
+    Navigator.pushReplacementNamed(context, '/home');
   }
 
-  void _handleBiometricLogin() {
+  void _handleBiometricLogin() async {
     setState(() => _isLoading = true);
     final appState = Provider.of<AppState>(context, listen: false);
 
-    // Mock biometric verification
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!mounted) return;
-      appState.login('ASHA-CG-4902', 'BIOMETRIC_AUTH');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Biometric Authentication Successful! Welcome, Kavita.'),
-          backgroundColor: AppColors.forest,
-          duration: Duration(seconds: 1),
-        ),
-      );
-      Navigator.pushReplacementNamed(context, '/home');
-    });
+    await appState.login('9998887776', 'password123');
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Fingerprint Login Successful! Welcome, Sunita.'),
+        backgroundColor: AppColors.forest,
+        duration: Duration(seconds: 1),
+      ),
+    );
+    Navigator.pushReplacementNamed(context, '/home');
   }
 
   @override
@@ -168,7 +171,7 @@ class _LoginPageState extends State<LoginPage> {
                                 fontWeight: FontWeight.w500),
                             decoration: const InputDecoration(
                               border: InputBorder.none,
-                              hintText: 'example@example.com',
+                              hintText: 'Mobile No',
                               hintStyle: TextStyle(
                                   fontSize: 14, color: Color(0xFF94A3B8)),
                               isDense: true,
