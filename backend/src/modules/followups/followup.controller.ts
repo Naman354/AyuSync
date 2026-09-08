@@ -303,7 +303,14 @@ export const listFollowUps = async (req: Request, res: Response) => {
     if (status === 'OVERDUE') {
       where.OR = [
         { status: 'OVERDUE' },
+        { status: 'ESCALATED' },
         { status: 'PENDING', dueDate: { lt: new Date() } }
+      ];
+    } else if (status === 'PENDING') {
+      where.OR = [
+        { status: 'PENDING' },
+        { status: 'OVERDUE' },
+        { status: 'ESCALATED' }
       ];
     } else if (status) {
       where.status = status as string;
@@ -326,9 +333,9 @@ export const listFollowUps = async (req: Request, res: Response) => {
     // If database has no records yet, supply realistic demo records so UI is never blank
     if (followUps.length === 0) {
       if (status === 'OVERDUE') {
-        followUps = DEMO_SEED_FOLLOWUPS.filter(f => f.status === 'OVERDUE') as any;
+        followUps = DEMO_SEED_FOLLOWUPS.filter(f => f.status === 'OVERDUE' || f.status === 'ESCALATED') as any;
       } else if (status === 'PENDING') {
-        followUps = DEMO_SEED_FOLLOWUPS.filter(f => f.status === 'PENDING' || f.status === 'OVERDUE') as any;
+        followUps = DEMO_SEED_FOLLOWUPS.filter(f => f.status === 'PENDING' || f.status === 'OVERDUE' || f.status === 'ESCALATED') as any;
       } else if (status === 'COMPLETED') {
         followUps = DEMO_SEED_FOLLOWUPS.filter(f => f.status === 'COMPLETED') as any;
       } else {
@@ -387,42 +394,80 @@ export const completeFollowUp = async (req: Request, res: Response) => {
 export const escalateFollowUp = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { reason } = req.body;
+    const { reason, deescalate } = req.body;
 
     let updated: any = null;
     try {
       const existing = await prisma.followUp.findUnique({ where: { id } });
       const currentNotes = existing?.notes || '';
-      const escalationStamp = `[ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`;
-      const combinedNotes = currentNotes.includes('[ESCALATED TO MO')
-        ? currentNotes
-        : `${currentNotes ? currentNotes + ' · ' : ''}${escalationStamp}${reason ? ` Reason: ${reason}` : ''}`;
+      const isAlreadyEscalated = existing?.status === 'ESCALATED';
+      const shouldDeescalate = deescalate !== undefined ? Boolean(deescalate) : isAlreadyEscalated;
 
-      updated = await prisma.followUp.update({
-        where: { id },
-        data: {
-          status: 'ESCALATED',
-          notes: combinedNotes,
-        },
-        include: { patient: true }
-      });
+      if (shouldDeescalate) {
+        // Revert to OVERDUE and remove the escalation stamp from notes
+        const cleanedNotes = currentNotes
+          .replace(/\[ESCALATED TO MO:[^\]]*\]/g, '')
+          .replace(/Reason: [^\s·]+/g, '')
+          .replace(/\s*·\s*·\s*/g, ' · ')
+          .trim();
+
+        updated = await prisma.followUp.update({
+          where: { id },
+          data: {
+            status: 'OVERDUE',
+            notes: cleanedNotes || null,
+          },
+          include: { patient: true }
+        });
+      } else {
+        const escalationStamp = `[ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`;
+        const combinedNotes = currentNotes.includes('[ESCALATED TO MO')
+          ? currentNotes
+          : `${currentNotes ? currentNotes + ' · ' : ''}${escalationStamp}${reason ? ` Reason: ${reason}` : ''}`;
+
+        updated = await prisma.followUp.update({
+          where: { id },
+          data: {
+            status: 'ESCALATED',
+            notes: combinedNotes,
+          },
+          include: { patient: true }
+        });
+      }
     } catch {
       // In-memory demo fallback: update DEMO_SEED_FOLLOWUPS if present
       const demoItem = DEMO_SEED_FOLLOWUPS.find(f => f.id === id);
+      const isAlreadyEscalated = demoItem?.status === 'ESCALATED';
+      const shouldDeescalate = deescalate !== undefined ? Boolean(deescalate) : isAlreadyEscalated;
+
       if (demoItem) {
-        demoItem.status = 'ESCALATED';
-        demoItem.notes = `${demoItem.notes || ''} [ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`;
-        updated = demoItem;
+        if (shouldDeescalate) {
+          demoItem.status = 'OVERDUE';
+          demoItem.notes = (demoItem.notes || '').replace(/\[ESCALATED TO MO:[^\]]*\]/g, '').trim();
+          updated = demoItem;
+        } else {
+          demoItem.status = 'ESCALATED';
+          demoItem.notes = `${demoItem.notes || ''} [ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`;
+          updated = demoItem;
+        }
       } else {
         updated = {
           id,
-          status: 'ESCALATED',
-          notes: `[ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`
+          status: shouldDeescalate ? 'OVERDUE' : 'ESCALATED',
+          notes: shouldDeescalate ? '' : `[ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`
         };
       }
     }
 
-    res.json({ success: true, followUp: updated, message: 'Task successfully escalated to Medical Officer.' });
+    const isDeescalated = updated.status !== 'ESCALATED';
+    res.json({
+      success: true,
+      followUp: updated,
+      isEscalated: !isDeescalated,
+      message: isDeescalated
+        ? 'Escalation reverted. Task restored to standard overdue queue.'
+        : 'Task successfully escalated to Medical Officer.'
+    });
   } catch (error: any) {
     console.error('[followup] escalateFollowUp error:', error.message);
     res.status(500).json({ error: 'Internal Server Error' });

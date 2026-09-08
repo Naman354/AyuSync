@@ -49,10 +49,20 @@ function getPersistedEscalations(): Set<string> {
   }
 }
 
+function syncPersistedEscalations(current: Set<string>) {
+  localStorage.setItem(ESCALATED_STORAGE_KEY, JSON.stringify(Array.from(current)));
+}
+
 function savePersistedEscalation(id: string) {
   const current = getPersistedEscalations();
   current.add(id);
-  localStorage.setItem(ESCALATED_STORAGE_KEY, JSON.stringify(Array.from(current)));
+  syncPersistedEscalations(current);
+}
+
+function removePersistedEscalation(id: string) {
+  const current = getPersistedEscalations();
+  current.delete(id);
+  syncPersistedEscalations(current);
 }
 
 const DEMO_TASKS: Task[] = [
@@ -139,15 +149,22 @@ export default function CareGaps() {
           // Completed tasks should not remain visible on screen
           const activeOnly = live.filter(f => f.status !== 'COMPLETED');
 
-          // Sync escalated items into persistent set
-          const persisted = getPersistedEscalations();
+          // Sync escalated items into persistent set from server data
+          const serverEscalations = new Set<string>();
           activeOnly.forEach(f => {
             if (f.status === 'ESCALATED' || (f.notes && f.notes.includes('[ESCALATED TO MO'))) {
-              persisted.add(f.id);
+              serverEscalations.add(f.id);
             }
           });
-          localStorage.setItem(ESCALATED_STORAGE_KEY, JSON.stringify(Array.from(persisted)));
-          setEscalated(new Set(persisted));
+          // Preserve any locally cached escalations for offline continuity
+          const localEscalations = getPersistedEscalations();
+          localEscalations.forEach(id => {
+            if (activeOnly.some(t => t.id === id && (t.status === 'ESCALATED' || t.notes?.includes('[ESCALATED TO MO')))) {
+              serverEscalations.add(id);
+            }
+          });
+          syncPersistedEscalations(serverEscalations);
+          setEscalated(new Set(serverEscalations));
 
           setTasks(activeOnly.map(f => {
             const reason = (f.reason || '').toLowerCase();
@@ -208,7 +225,7 @@ export default function CareGaps() {
     // 2. Dispatch completion to backend
     api.patch(`/followups/${taskId}/complete`, { completionNotes: notesToSave }).catch(() => {});
 
-    // 3. Briefly animate task text being crossed out (400ms), then remove task card from visible list
+    // 3. Briefly animate task text being crossed out (350ms), then remove task card from visible list
     setTimeout(() => {
       setTasks(prev => prev.filter(t => t.id !== taskId));
       setAnimatingTaskIds(prev => {
@@ -217,26 +234,47 @@ export default function CareGaps() {
         return next;
       });
       setFeedbackMsg(`Completed recovery visit for "${patientName}".`);
-      setTimeout(() => setFeedbackMsg(''), 3500);
-    }, 450);
+      setTimeout(() => setFeedbackMsg(''), 3000);
+    }, 350);
   };
 
-  // Escalate to MO: updates backend and persists to localStorage so refresh never reverts it
-  const handleEscalate = async (taskId: string, patientName: string) => {
+  // Two-way persistent toggle: Escalate to MO <-> Escalated to MO
+  const handleToggleEscalate = async (taskId: string, patientName: string) => {
+    const isCurrentlyEscalated = escalated.has(taskId);
     setEscalating(taskId);
-    savePersistedEscalation(taskId);
-    setEscalated(prev => new Set(prev).add(taskId));
 
-    try {
-      await api.patch(`/followups/${taskId}/escalate`, { reason: 'Overdue recovery check > 48 hours' }).catch(() => {});
-      await api.post('/notifications', {
-        type: 'CARE_GAP_ESCALATION',
-        message: `OVERDUE ESCALATION: Patient ${patientName} missed mandatory 48-hour post-consultation recovery check. Dispatched for District Health Officer & MO review.`,
-      }).catch(() => {});
-    } finally {
-      setEscalating(null);
-      setFeedbackMsg(`Escalation alert dispatched to Medical Officer for ${patientName}.`);
-      setTimeout(() => setFeedbackMsg(''), 4000);
+    if (isCurrentlyEscalated) {
+      // Toggle off: De-escalate
+      removePersistedEscalation(taskId);
+      setEscalated(prev => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+
+      try {
+        await api.patch(`/followups/${taskId}/escalate`, { deescalate: true }).catch(() => {});
+      } finally {
+        setEscalating(null);
+        setFeedbackMsg(`Escalation removed for ${patientName}.`);
+        setTimeout(() => setFeedbackMsg(''), 3000);
+      }
+    } else {
+      // Toggle on: Escalate
+      savePersistedEscalation(taskId);
+      setEscalated(prev => new Set(prev).add(taskId));
+
+      try {
+        await api.patch(`/followups/${taskId}/escalate`, { deescalate: false, reason: 'Overdue recovery check > 48 hours' }).catch(() => {});
+        await api.post('/notifications', {
+          type: 'CARE_GAP_ESCALATION',
+          message: `OVERDUE ESCALATION: Patient ${patientName} missed mandatory 48-hour post-consultation recovery check. Dispatched for District Health Officer & MO review.`,
+        }).catch(() => {});
+      } finally {
+        setEscalating(null);
+        setFeedbackMsg(`Escalated to Medical Officer for ${patientName}.`);
+        setTimeout(() => setFeedbackMsg(''), 3500);
+      }
     }
   };
 
@@ -504,23 +542,23 @@ export default function CareGaps() {
 
                   {/* Right Actions */}
                   <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                    {/* Escalate button (for overdue) */}
+                    {/* Two-way persistent Escalate / Escalated Toggle */}
                     {isOverdue && (
-                      isTaskEscalated ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 shadow-xs">
-                          <Bell size={12} className="text-red-600" /> Escalated to MO
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleEscalate(task.id, task.patientName)}
-                          disabled={escalating === task.id || isCrossedOut}
-                          title="Alert District Health Officer & MO for urgent home visit intervention"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors disabled:opacity-60 shadow-xs"
-                        >
-                          <Bell size={13} />
-                          {escalating === task.id ? 'Escalating...' : 'Escalate to MO'}
-                        </button>
-                      )
+                      <button
+                        onClick={() => handleToggleEscalate(task.id, task.patientName)}
+                        disabled={escalating === task.id || isCrossedOut}
+                        title={isTaskEscalated ? "Click to remove escalation to Medical Officer" : "Alert District Health Officer & MO for urgent home visit intervention"}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-60 shadow-xs cursor-pointer ${
+                          isTaskEscalated
+                            ? 'bg-red-600 hover:bg-red-700 text-white border border-red-600 shadow-sm'
+                            : 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200'
+                        }`}
+                      >
+                        <Bell size={12} className={isTaskEscalated ? 'text-white' : 'text-red-600'} />
+                        {escalating === task.id
+                          ? (isTaskEscalated ? 'Reverting…' : 'Escalating…')
+                          : (isTaskEscalated ? 'Escalated to MO' : 'Escalate to MO')}
+                      </button>
                     )}
 
                     {/* Mark Complete button */}

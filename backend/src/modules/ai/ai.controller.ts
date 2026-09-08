@@ -13,13 +13,63 @@ export const handleTriage = async (req: Request, res: Response) => {
   const { patientId, age = 35, gender = 'U', symptoms = [], vitals, history } = req.body;
 
   try {
+    // Format symptoms for Python FastAPI Pydantic schema: List[Symptom(name: str)]
+    const formattedSymptoms = Array.isArray(symptoms)
+      ? symptoms.map((s: any) => typeof s === 'string' ? { name: s } : { name: s.name || String(s) })
+      : [];
+
+    // Format vitals for Python FastAPI Pydantic schema: List[Vital(type: str, value: str, unit: str)]
+    let formattedVitals: any[] = [];
+    if (Array.isArray(vitals)) {
+      formattedVitals = vitals;
+    } else if (vitals && typeof vitals === 'object') {
+      const bpVal = vitals.blood_pressure || (vitals.bpSystolic ? `${vitals.bpSystolic}/${vitals.bpDiastolic || 80}` : null);
+      if (bpVal) {
+        formattedVitals.push({ type: 'BP', value: String(bpVal), unit: 'mmHg' });
+      }
+      const spo2Val = vitals.spo2 != null ? vitals.spo2 : vitals.spO2;
+      if (spo2Val != null) {
+        formattedVitals.push({ type: 'SPO2', value: String(spo2Val), unit: '%' });
+      }
+      const hrVal = vitals.heart_rate != null ? vitals.heart_rate : vitals.heartRate;
+      if (hrVal != null) {
+        formattedVitals.push({ type: 'HR', value: String(hrVal), unit: 'bpm' });
+      }
+      if (vitals.temperature != null) {
+        formattedVitals.push({ type: 'TEMP', value: String(vitals.temperature), unit: '°F' });
+      }
+    }
+
     // Attempt to call Python FastAPI microservice
     const aiResponse = await axios.post(
       `${AI_SERVICE_URL}/triage`,
-      { patientId, age, gender, symptoms, vitals, history },
+      {
+        patientId: patientId || 'anon-intake',
+        symptoms: formattedSymptoms,
+        vitals: formattedVitals,
+      },
       { timeout: 3000 }
     );
-    return res.json(aiResponse.data);
+
+    const d = aiResponse.data;
+    const cat = (d.urgencyCategory || d.urgency || 'ROUTINE').toUpperCase();
+    return res.json({
+      urgency: cat,
+      urgencyCategory: cat,
+      confidence: d.confidence || 0.88,
+      reasons: Array.isArray(d.reasons) ? d.reasons : [],
+      missing_information: Array.isArray(d.missingInformation) ? d.missingInformation : [],
+      tier: cat === 'URGENT'
+        ? 'Community Health Centre (CHC) or District Hospital'
+        : cat === 'PRIORITY'
+        ? 'Primary Health Centre (PHC)'
+        : 'Health & Wellness Centre',
+      recommended_next_action: cat === 'URGENT'
+        ? 'Immediate Medical Officer consultation. Transfer for emergency stabilization.'
+        : cat === 'PRIORITY'
+        ? 'Doctor review recommended within 2 hours. Monitor vital signs.'
+        : 'Standard outpatient consultation during regular clinic hours.'
+    });
   } catch (err: any) {
     console.warn(`[AI Proxy] Microservice unavailable (${err.message}). Using clinical rule engine fallback.`);
   }
@@ -30,23 +80,26 @@ export const handleTriage = async (req: Request, res: Response) => {
   const riskFactors: string[] = [];
   const missingInfo: string[] = [];
 
-  // Parse Vitals
+  // Parse Vitals with flexible field naming
   let systolic = 120;
   let diastolic = 80;
   if (vitals?.blood_pressure) {
     const parts = String(vitals.blood_pressure).split('/');
     systolic = parseInt(parts[0], 10) || 120;
     diastolic = parseInt(parts[1], 10) || 80;
+  } else if (vitals?.bpSystolic) {
+    systolic = parseInt(vitals.bpSystolic, 10) || 120;
+    diastolic = parseInt(vitals.bpDiastolic, 10) || 80;
   } else {
     missingInfo.push('Blood pressure was not recorded during intake');
   }
 
-  const spo2 = vitals?.spo2 != null ? Number(vitals.spo2) : null;
+  const spo2 = vitals?.spo2 != null ? Number(vitals.spo2) : (vitals?.spO2 != null ? Number(vitals.spO2) : null);
   if (spo2 == null) {
     missingInfo.push('Oxygen saturation (SpO2) was not recorded');
   }
 
-  const hr = vitals?.heart_rate != null ? Number(vitals.heart_rate) : null;
+  const hr = vitals?.heart_rate != null ? Number(vitals.heart_rate) : (vitals?.heartRate != null ? Number(vitals.heartRate) : null);
   if (hr == null) {
     missingInfo.push('Pulse / heart rate was not recorded');
   }

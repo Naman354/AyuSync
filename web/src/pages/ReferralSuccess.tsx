@@ -60,11 +60,111 @@ export default function ReferralSuccess() {
   const currentUrgency = URGENCY_STYLE[urgency] || URGENCY_STYLE.ROUTINE;
 
   const handlePrint = () => {
+    const slipEl = document.getElementById('referral-print-slip');
+    if (!slipEl) {
+      window.print();
+      return;
+    }
+
+    try {
+      let printFrame = document.getElementById('ayusync-print-frame') as HTMLIFrameElement | null;
+      if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'ayusync-print-frame';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        document.body.appendChild(printFrame);
+      }
+
+      const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
+      if (frameDoc) {
+        frameDoc.open();
+        frameDoc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Referral Slip - ${patientName}</title>
+              <style>
+                @page { size: A4 portrait; margin: 10mm; }
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body {
+                  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  color: #000;
+                  background: #fff;
+                  padding: 10px;
+                  font-size: 12px;
+                  line-height: 1.4;
+                }
+                #referral-print-slip {
+                  border: 2px solid #000;
+                  border-radius: 8px;
+                  padding: 20px 24px;
+                  background: #fff;
+                }
+                .border-b-2 { border-bottom: 2px solid #000; }
+                .border-b { border-bottom: 1px solid #d1d5db; }
+                .border { border: 1px solid #d1d5db; }
+                .rounded-xl { border-radius: 10px; }
+                .rounded-lg { border-radius: 6px; }
+                .p-3 { padding: 12px; }
+                .p-2 { padding: 8px; }
+                .py-3 { padding-top: 10px; padding-bottom: 10px; }
+                .py-4 { padding-top: 12px; padding-bottom: 12px; }
+                .pt-4 { padding-top: 14px; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                .font-bold { font-weight: bold; }
+                .font-mono { font-family: monospace; }
+                .uppercase { text-transform: uppercase; }
+                .grid { display: grid; gap: 10px; }
+                .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+                .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+                .grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+                .flex { display: flex; }
+                .items-center { align-items: center; }
+                .justify-between { justify-content: space-between; }
+                .bg-gray-50 { background-color: #f9fafb; }
+                .badge {
+                  display: inline-block;
+                  padding: 3px 8px;
+                  font-weight: bold;
+                  font-size: 11px;
+                  border-radius: 4px;
+                  border: 1px solid #111;
+                }
+                .badge-urgent { background: #fee2e2; color: #991b1b; }
+                .badge-priority { background: #fef3c7; color: #92400e; }
+                .badge-routine { background: #dcfce7; color: #166534; }
+                .sign-box { min-height: 48px; border-bottom: 1px solid #9ca3af; margin-top: 20px; }
+              </style>
+            </head>
+            <body>
+              ${slipEl.outerHTML}
+            </body>
+          </html>
+        `);
+        frameDoc.close();
+
+        setTimeout(() => {
+          printFrame?.contentWindow?.focus();
+          printFrame?.contentWindow?.print();
+        }, 300);
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
     window.print();
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 animate-page-in pb-16">
+    <div className="max-w-3xl mx-auto space-y-6 pb-16">
       {/* ── Print-specific Style Block ── */}
       <style>{`
         @media print {
@@ -72,31 +172,44 @@ export default function ReferralSuccess() {
             size: A4 portrait;
             margin: 10mm;
           }
-          body {
+          html, body {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
             background: #ffffff !important;
             color: #000000 !important;
             margin: 0 !important;
             padding: 0 !important;
           }
-          header, nav, footer, .no-print, button, a {
+          *, *::before, *::after {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
+          }
+          header, nav, footer, aside, .no-print, button, a {
             display: none !important;
           }
-          #referral-print-slip {
-            display: block !important;
+          body * {
+            visibility: hidden;
+          }
+          #referral-print-slip,
+          #referral-print-slip * {
             visibility: visible !important;
+          }
+          #referral-print-slip {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 20px !important;
             border: 2px solid #000 !important;
             background: #fff !important;
-            box-shadow: none !important;
+            display: block !important;
             page-break-inside: avoid !important;
-          }
-          #referral-print-slip * {
-            visibility: visible !important;
-            color: #000000 !important;
-            background: transparent !important;
           }
         }
       `}</style>

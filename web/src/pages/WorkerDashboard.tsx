@@ -9,7 +9,7 @@ import EmptyState from '../components/ui/EmptyState';
 import {
   UserPlus, CheckSquare, ChevronRight, AlertTriangle,
   Wifi, WifiOff, RefreshCw, Users, Clock,
-  ClipboardList, CheckCircle2, Pill, BookOpen,
+  ClipboardList, CheckCircle2, Pill,
 } from 'lucide-react';
 import { useNetworkStatus } from '../lib/network';
 import { getOfflineQueue, getLocalPatients, flushOfflineSync } from '../lib/offlineSync';
@@ -27,10 +27,10 @@ function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: str
     setIsCrossedOut(true);
     api.patch(`/followups/${task.id}/complete`, {}).catch(() => {});
 
-    // 2. Remove the task card from the visible list after 450ms
+    // 2. Remove the task card from the visible list after 350ms
     setTimeout(() => {
       onComplete(task.id);
-    }, 450);
+    }, 350);
   };
 
   return (
@@ -244,7 +244,7 @@ export default function WorkerDashboard() {
   };
 
   const completeTask = (id: string) => {
-    setFollowUps(prev => prev.map(f => f.id === id ? { ...f, status: 'COMPLETED' } : f));
+    setFollowUps(prev => prev.filter(f => f.id !== id));
   };
 
   // Stats
@@ -406,80 +406,6 @@ export default function WorkerDashboard() {
               ))}
             </ul>
           )}
-        </div>
-
-        {/* ── Field Health Guidance & Warning Signs Card ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#e4efe7] text-[#1e6641] flex items-center justify-center">
-                <BookOpen size={16} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">ASHA Field Reference & Warning Signs</h3>
-                <p className="text-[11px] text-gray-500">Standard vital thresholds & red flags for immediate referral</p>
-              </div>
-            </div>
-            <Link
-              to="/guidance"
-              className="text-xs font-semibold text-[#1e6641] hover:underline flex items-center gap-1"
-            >
-              Full Guide <ChevronRight size={13} />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3.5">
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs">
-              <span className="text-[10px] text-gray-500 font-bold block uppercase">Blood Pressure</span>
-              <div className="font-semibold text-gray-900 mt-0.5">Normal: &lt;120/80</div>
-              <div className="text-[10px] text-red-600 font-bold mt-0.5">Red Flag: ≥140/90</div>
-            </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs">
-              <span className="text-[10px] text-gray-500 font-bold block uppercase">Oxygen (SpO₂)</span>
-              <div className="font-semibold text-gray-900 mt-0.5">Normal: ≥95%</div>
-              <div className="text-[10px] text-red-600 font-bold mt-0.5">Red: &lt;90% (Call 108)</div>
-            </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs">
-              <span className="text-[10px] text-gray-500 font-bold block uppercase">Pulse Rate</span>
-              <div className="font-semibold text-gray-900 mt-0.5">Normal: 60–100 bpm</div>
-              <div className="text-[10px] text-red-600 font-bold mt-0.5">Red: &gt;120 or &lt;50</div>
-            </div>
-            <div className="bg-gray-50 p-2.5 rounded-xl border border-gray-100 text-xs">
-              <span className="text-[10px] text-gray-500 font-bold block uppercase">Temperature</span>
-              <div className="font-semibold text-gray-900 mt-0.5">Normal: 97.5–99°F</div>
-              <div className="text-[10px] text-red-600 font-bold mt-0.5">Red: &gt;102°F or infant &lt;2m</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-            <div className="bg-red-50/70 p-3 rounded-xl border border-red-200/80">
-              <div className="font-bold text-red-900 flex items-center gap-1.5 mb-1 text-[11px]">
-                <AlertTriangle size={13} className="text-red-600 shrink-0" />
-                Maternal Danger Signs
-              </div>
-              <p className="text-[11px] text-red-800 leading-relaxed">
-                Severe headache, blurred vision, hand/facial edema (Pre-eclampsia), or any vaginal bleeding.
-              </p>
-            </div>
-            <div className="bg-red-50/70 p-3 rounded-xl border border-red-200/80">
-              <div className="font-bold text-red-900 flex items-center gap-1.5 mb-1 text-[11px]">
-                <AlertTriangle size={13} className="text-red-600 shrink-0" />
-                Child Danger Signs (&lt;5 yrs)
-              </div>
-              <p className="text-[11px] text-red-800 leading-relaxed">
-                Inability to drink/breastfeed, chest in-drawing with fast breathing, or persistent vomiting.
-              </p>
-            </div>
-            <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/80">
-              <div className="font-bold text-[#1e6641] flex items-center gap-1.5 mb-1 text-[11px]">
-                <CheckCircle2 size={13} className="text-[#1e6641] shrink-0" />
-                Referral Protocol
-              </div>
-              <p className="text-[11px] text-gray-700 leading-relaxed">
-                Red flags present → Call 108 + Urgent CHC Referral. Overdue recovery &gt;48h → Tap "Escalate to MO".
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* ── Recent patients ── */}

@@ -8,7 +8,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import {
   User, Activity, ArrowRight, ArrowLeft,
   Building2, Ambulance, Thermometer, Heart, Wind,
-  CheckCircle2, Info
+  CheckCircle2, Info, AlertTriangle, Sparkles
 } from 'lucide-react';
 
 const SYMPTOMS = [
@@ -42,8 +42,26 @@ export default function PatientIntakeFlow() {
   const [needsAmbulance, setNeedsAmbulance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const [assessment, setAssessment] = useState<{ urgency: string; score: number; tier: string; reasons: string[] } | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [manualUrgency, setManualUrgency] = useState<string | null>(null);
+  const [assessment, setAssessment] = useState<{
+    urgency: string;
+    aiPredictedUrgency: string;
+    score: number;
+    tier: string;
+    reasons: string[];
+    confidence?: number;
+    recommendation?: string;
+  } | null>(null);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
+
+  const effectiveUrgency = (manualUrgency || assessment?.urgency || 'ROUTINE').toUpperCase();
+  const isOverridden = Boolean(manualUrgency && manualUrgency !== assessment?.aiPredictedUrgency);
+  const effectiveTier = effectiveUrgency === 'URGENT'
+    ? 'Community Health Centre (CHC) or District Hospital'
+    : effectiveUrgency === 'PRIORITY'
+    ? 'Primary Health Centre (PHC)'
+    : 'Health & Wellness Centre';
 
   useEffect(() => {
     api.get('/facilities').then(r => {
@@ -146,32 +164,86 @@ export default function PatientIntakeFlow() {
     return Object.keys(errs).length === 0;
   };
 
-  const runAssessment = () => {
+  const runAssessment = async () => {
     if (!validateStep2()) return;
+    setAiLoading(true);
 
     const spo2 = parseFloat(vitals.spO2) || 98;
     const sys  = parseFloat(vitals.bpSystolic) || 120;
     const temp = parseFloat(vitals.temperature) || 98.6;
-    let urgency = 'ROUTINE'; let score = 20; let tier = 'Health & Wellness Centre';
-    const reasons: string[] = [];
+
+    let defaultUrgency = 'ROUTINE';
+    let defaultScore = 25;
+    let defaultTier = 'Health & Wellness Centre';
+    const defaultReasons: string[] = [];
 
     if (spo2 < 92 || sys >= 160 || symptoms.includes('Chest Pain')) {
-      urgency = 'URGENT'; score = 92; tier = 'Community Health Centre (CHC) or District Hospital';
-      if (spo2 < 92) reasons.push(`Oxygen level is low (${spo2}%) — normal is above 94%.`);
-      if (sys >= 160) reasons.push(`Blood pressure is very high (${sys}/${vitals.bpDiastolic} mmHg).`);
-      if (symptoms.includes('Chest Pain')) reasons.push('Chest pain reported — needs immediate evaluation.');
+      defaultUrgency = 'URGENT';
+      defaultScore = 92;
+      defaultTier = 'Community Health Centre (CHC) or District Hospital';
+      if (spo2 < 92) defaultReasons.push(`Oxygen level is low (${spo2}%) — normal is above 94%.`);
+      if (sys >= 160) defaultReasons.push(`Blood pressure is very high (${sys}/${vitals.bpDiastolic} mmHg).`);
+      if (symptoms.includes('Chest Pain')) defaultReasons.push('Chest pain reported — needs immediate evaluation.');
     } else if (spo2 < 95 || sys >= 140 || temp > 101 || symptoms.length >= 3) {
-      urgency = 'PRIORITY'; score = 65; tier = 'Primary Health Centre (PHC)';
-      if (sys >= 140) reasons.push(`Blood pressure is elevated (${sys}/${vitals.bpDiastolic} mmHg).`);
-      if (temp > 101) reasons.push(`High fever (${temp}°F) — needs doctor review.`);
-      if (symptoms.length >= 3) reasons.push(`Multiple symptoms reported (${symptoms.length}) — should be seen today.`);
+      defaultUrgency = 'PRIORITY';
+      defaultScore = 65;
+      defaultTier = 'Primary Health Centre (PHC)';
+      if (sys >= 140) defaultReasons.push(`Blood pressure is elevated (${sys}/${vitals.bpDiastolic} mmHg).`);
+      if (temp > 101) defaultReasons.push(`High fever (${temp}°F) — needs doctor review.`);
+      if (symptoms.length >= 3) defaultReasons.push(`Multiple symptoms reported (${symptoms.length}) — should be seen today.`);
     } else {
-      reasons.push('Measurements are within normal range.');
-      reasons.push('Suitable for regular monitoring or home visit.');
+      defaultReasons.push('Vital signs and measurements are within normal clinical ranges.');
+      defaultReasons.push('Suitable for regular monitoring or routine outpatient consultation.');
     }
 
-    setAssessment({ urgency, score, tier, reasons });
-    setStep(3);
+    try {
+      // Automatically invoke existing AI service via backend proxy
+      const res = await api.post('/ai/triage', {
+        age: parseInt(patient.age || '30', 10),
+        gender: patient.gender,
+        symptoms: symptoms.map(s => ({ name: s })),
+        vitals: {
+          blood_pressure: `${vitals.bpSystolic || 120}/${vitals.bpDiastolic || 80}`,
+          bpSystolic: vitals.bpSystolic,
+          bpDiastolic: vitals.bpDiastolic,
+          spo2: vitals.spO2,
+          heart_rate: vitals.heartRate,
+          temperature: vitals.temperature,
+        }
+      });
+
+      const d = res.data;
+      const aiUrgency = (d.urgency || d.urgencyCategory || defaultUrgency).toUpperCase();
+      const reasons = Array.isArray(d.reasons) && d.reasons.length > 0 ? d.reasons : defaultReasons;
+      const tier = d.tier || (aiUrgency === 'URGENT' ? 'Community Health Centre (CHC) or District Hospital' : aiUrgency === 'PRIORITY' ? 'Primary Health Centre (PHC)' : 'Health & Wellness Centre');
+      const score = aiUrgency === 'URGENT' ? 95 : aiUrgency === 'PRIORITY' ? 65 : 25;
+
+      setAssessment({
+        urgency: aiUrgency,
+        aiPredictedUrgency: aiUrgency,
+        score,
+        tier,
+        reasons,
+        confidence: d.confidence,
+        recommendation: d.recommended_next_action || tier
+      });
+      setManualUrgency(null);
+    } catch {
+      // Offline or network fallback to clinical rule engine
+      setAssessment({
+        urgency: defaultUrgency,
+        aiPredictedUrgency: defaultUrgency,
+        score: defaultScore,
+        tier: defaultTier,
+        reasons: defaultReasons,
+        confidence: 0.85,
+        recommendation: defaultTier
+      });
+      setManualUrgency(null);
+    } finally {
+      setAiLoading(false);
+      setStep(3);
+    }
   };
 
   const handleSubmit = async () => {
@@ -220,7 +292,7 @@ export default function PatientIntakeFlow() {
             id: `offline-ref-${Date.now()}`,
             patientId: offlinePatientId,
             destinationId: selectedFacility,
-            urgency: assessment?.urgency || 'ROUTINE',
+            urgency: effectiveUrgency,
             reason: cleanReason
           }
         });
@@ -235,7 +307,7 @@ export default function PatientIntakeFlow() {
         phone: cleanPhone,
         village: cleanVillage,
         abhaId: cleanAbha,
-        urgency: assessment?.urgency || 'ROUTINE',
+        urgency: effectiveUrgency,
         facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
         originFacility: facilities[0]?.name || 'Khandala Sub-Center',
         symptoms,
@@ -276,7 +348,7 @@ export default function PatientIntakeFlow() {
             enqueueOfflineMutation({
               entity: 'REFERRAL',
               action: 'CREATE',
-              payload: { patientId: offlinePatId, destinationId: selectedFacility, urgency: assessment?.urgency || 'ROUTINE', reason: cleanReason }
+              payload: { patientId: offlinePatId, destinationId: selectedFacility, urgency: effectiveUrgency, reason: cleanReason }
             });
           }
           const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
@@ -289,7 +361,7 @@ export default function PatientIntakeFlow() {
               phone: cleanPhone,
               village: cleanVillage,
               abhaId: cleanAbha,
-              urgency: assessment?.urgency || 'ROUTINE',
+              urgency: effectiveUrgency,
               facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
               originFacility: facilities[0]?.name || 'Khandala Sub-Center',
               symptoms,
@@ -317,7 +389,7 @@ export default function PatientIntakeFlow() {
           patientId: createdPatient.id,
           originId: originFacilityId,
           destinationId: selectedFacility,
-          urgency: assessment?.urgency || 'ROUTINE',
+          urgency: effectiveUrgency,
           reason: cleanReason
         });
       }
@@ -332,7 +404,7 @@ export default function PatientIntakeFlow() {
           phone: cleanPhone,
           village: cleanVillage,
           abhaId: cleanAbha,
-          urgency: assessment?.urgency || 'ROUTINE',
+          urgency: effectiveUrgency,
           facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
           originFacility: facilities[0]?.name || 'Khandala Sub-Center',
           symptoms,
@@ -561,39 +633,146 @@ export default function PatientIntakeFlow() {
             <Button variant="outline" onClick={() => setStep(1)} className="flex items-center gap-1.5 text-sm">
               <ArrowLeft size={14} /> Back
             </Button>
-            <Button onClick={runAssessment} className="bg-[#1e6641] hover:bg-[#165032] text-white flex items-center gap-2 h-11 px-6">
-              Check health risk <ArrowRight size={16} />
+            <Button
+              onClick={runAssessment}
+              disabled={aiLoading}
+              className="bg-[#1e6641] hover:bg-[#165032] text-white flex items-center gap-2 h-11 px-6 shadow-xs"
+            >
+              {aiLoading ? (
+                <>
+                  <Sparkles size={16} className="animate-spin text-emerald-200" />
+                  Running AI Triage…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} className="text-emerald-200" />
+                  Check health risk <ArrowRight size={16} />
+                </>
+              )}
             </Button>
           </div>
         </div>
       )}
 
-      {/* ── STEP 3: Health assessment (was "AI Triage") ── */}
+      {/* ── STEP 3: Health assessment with AI Recommendation & Manual Urgency Override ── */}
       {step === 3 && assessment && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-5">
-          <div className="flex items-center justify-between pb-4 border-b border-gray-50">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
             <div>
-              <h2 className="text-base font-bold text-gray-900">Health assessment</h2>
-              <p className="text-xs text-gray-500">Based on the measurements you recorded</p>
+              <div className="flex items-center gap-2">
+                <Sparkles size={17} className="text-[#1e6641]" />
+                <h2 className="text-base font-bold text-gray-900">AI Triage & Clinical Assessment</h2>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Automated clinical recommendation based on recorded vitals & complaints
+              </p>
             </div>
-            <StatusBadge status={assessment.urgency} size="md" />
+            <div className="flex items-center gap-2">
+              <StatusBadge status={effectiveUrgency} size="md" />
+              {isOverridden && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                  ASHA Override
+                </span>
+              )}
+            </div>
           </div>
 
+          {/* AI Recommended Next Step */}
           <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-            <div className="text-xs font-semibold text-gray-500 mb-1">Recommended next step</div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-gray-500">Recommended Next Step</span>
+              {assessment.confidence && (
+                <span className="text-[10px] font-bold text-gray-400">
+                  Confidence: {Math.round(assessment.confidence * 100)}%
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-base font-bold text-gray-900">
               <Building2 size={18} className="text-[#1e6641] shrink-0" />
-              {assessment.tier}
+              {effectiveTier}
             </div>
+            {assessment.recommendation && assessment.recommendation !== effectiveTier && (
+              <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">
+                {assessment.recommendation}
+              </p>
+            )}
           </div>
 
+          {/* Manual Classification Override Control */}
+          <div className="p-4 rounded-xl border border-gray-200 bg-white space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-gray-800 uppercase tracking-wide">
+                Urgency Classification (ASHA Verification)
+              </label>
+              <span className="text-[11px] text-gray-500">
+                AI Predicted: <strong className="text-gray-700">{assessment.aiPredictedUrgency || assessment.urgency}</strong>
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">
+              If the automatic prediction is incorrect, tap to manually change the classification. Your manual selection overrides the automatic prediction and is saved as the patient's final classification:
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setManualUrgency('ROUTINE')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                  effectiveUrgency === 'ROUTINE'
+                    ? 'bg-emerald-100 text-[#1e6641] border-[#1e6641] ring-2 ring-[#1e6641]/20 shadow-xs'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <CheckCircle2 size={14} className={effectiveUrgency === 'ROUTINE' ? 'text-[#1e6641]' : 'text-gray-400'} />
+                Routine (Scheduled)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setManualUrgency('PRIORITY')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                  effectiveUrgency === 'PRIORITY'
+                    ? 'bg-amber-100 text-amber-900 border-amber-500 ring-2 ring-amber-400/20 shadow-xs'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <Activity size={14} className={effectiveUrgency === 'PRIORITY' ? 'text-amber-700' : 'text-gray-400'} />
+                Priority (Same-Day)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setManualUrgency('URGENT')}
+                className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold transition-all border col-span-2 sm:col-span-1 cursor-pointer ${
+                  effectiveUrgency === 'URGENT'
+                    ? 'bg-red-100 text-red-900 border-red-500 ring-2 ring-red-400/20 shadow-xs'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <AlertTriangle size={14} className={effectiveUrgency === 'URGENT' ? 'text-red-600' : 'text-gray-400'} />
+                Urgent (Immediate)
+              </button>
+            </div>
+            {isOverridden && (
+              <div className="flex items-center justify-between text-xs text-amber-800 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                <span>Manual override active: <strong>{effectiveUrgency}</strong> (Saved as final classification)</span>
+                <button
+                  type="button"
+                  onClick={() => setManualUrgency(null)}
+                  className="text-[11px] underline font-semibold text-amber-900 hover:text-amber-950 cursor-pointer ml-2"
+                >
+                  Reset to AI prediction
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* AI Clinical Explanations */}
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-2.5">
-              <Info size={13} className="text-[#1e6641]" /> Why we recommend this
+              <Info size={13} className="text-[#1e6641]" /> Clinical reasons identified by AI
             </div>
             <div className="space-y-2">
               {assessment.reasons.map((r, i) => (
-                <div key={i} className="flex items-start gap-2.5 text-sm text-gray-700 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-gray-700 bg-gray-50 rounded-xl p-3 border border-gray-100">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#1e6641] shrink-0 mt-1.5" />
                   {r}
                 </div>
