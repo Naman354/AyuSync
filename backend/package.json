@@ -14,8 +14,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:push": "prisma db push --accept-data-loss",
     "render:build": "npm install && npx prisma generate && npm run build",
-    "render:start": "npx prisma migrate deploy && npx ts-node prisma/seed.ts && node dist/index.js"
+    "render:start": "npx prisma db push --accept-data-loss && npx ts-node prisma/seed.ts && node dist/index.js"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",
