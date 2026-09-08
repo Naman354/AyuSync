@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import SplashScreen from './components/ui/SplashScreen';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -49,9 +49,46 @@ function NavLink({ to, exact, children }: { to: string; exact?: boolean; childre
 // ─── Protected shell ─────────────────────────────────────────────────────────
 const ProtectedRoute = () => {
   const token = localStorage.getItem('ayusync_token');
-  const user   = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
-  const [currentRole, setCurrentRole] = useState<string>(user.role || 'DOCTOR');
+  const location = useLocation();
+  const navigate = useNavigate();
   const { isOffline, toggleOffline } = useNetworkStatus();
+
+  const [user, setUser] = useState<any>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  // Automatically derive active role from current URL path or stored user
+  const getRoleFromPath = (path: string): string => {
+    if (path.startsWith('/worker') || path.startsWith('/intake') || path.startsWith('/followups')) return 'WORKER';
+    if (path.startsWith('/patient')) return 'PATIENT';
+    if (path.startsWith('/dashboard') || path.startsWith('/queue') || path.startsWith('/facilities')) return 'DOCTOR';
+    return user.role || 'DOCTOR';
+  };
+
+  const currentRole = getRoleFromPath(location.pathname);
+
+  // Synchronize localStorage and user state when role/route changes
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+      if (stored.role !== currentRole && !location.pathname.startsWith('/patients')) {
+        let name = stored.name;
+        if (currentRole === 'DOCTOR') name = 'Dr. Rajesh Deshmukh';
+        else if (currentRole === 'WORKER') name = 'Sunita Patil';
+        else if (currentRole === 'PATIENT') name = 'Ramesh Kulkarni';
+
+        const updated = { ...stored, role: currentRole, name };
+        localStorage.setItem('ayusync_user', JSON.stringify(updated));
+        setUser(updated);
+      } else {
+        setUser(stored);
+      }
+    } catch {}
+  }, [location.pathname, currentRole]);
 
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
@@ -84,25 +121,27 @@ const ProtectedRoute = () => {
   const switchRole = () => {
     let newRole = 'DOCTOR';
     let newName = 'Dr. Rajesh Deshmukh';
+    let targetPath = '/dashboard';
     let patientId = user.patientId;
     if (currentRole === 'DOCTOR') {
       newRole = 'WORKER';
       newName = 'Sunita Patil';
+      targetPath = '/worker';
     } else if (currentRole === 'WORKER') {
       newRole = 'PATIENT';
       newName = 'Ramesh Kulkarni';
       patientId = patientId || 'pat-ramesh-kulkarni';
+      targetPath = '/patient';
     } else {
       newRole = 'DOCTOR';
       newName = 'Dr. Rajesh Deshmukh';
+      targetPath = '/dashboard';
     }
 
     const updated = { ...user, role: newRole, name: newName, patientId };
     localStorage.setItem('ayusync_user', JSON.stringify(updated));
-    setCurrentRole(newRole);
-    if (newRole === 'WORKER') window.location.href = '/worker';
-    else if (newRole === 'PATIENT') window.location.href = '/patient';
-    else window.location.href = '/dashboard';
+    setUser(updated);
+    navigate(targetPath, { replace: true });
   };
 
   const isDoctor = !isWorker && !isPatient;
@@ -311,6 +350,26 @@ const ProtectedRoute = () => {
   );
 };
 
+function RootRedirect() {
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  if (user.role === 'WORKER') return <Navigate to="/worker" replace />;
+  if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
+function DoctorRouteGuard({ children }: { children: React.ReactNode }) {
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
+  if (user.role === 'WORKER') return <Navigate to="/worker" replace />;
+  return <>{children}</>;
+}
+
+function WorkerRouteGuard({ children }: { children: React.ReactNode }) {
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
+  return <>{children}</>;
+}
+
 function PatientsRouteGuard() {
   const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
   if (user.role === 'PATIENT') {
@@ -346,17 +405,17 @@ export default function App() {
           <Route path="/login" element={<Login />} />
 
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard"         element={<Dashboard />} />
-            <Route path="/worker"            element={<WorkerDashboard />} />
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="/dashboard"         element={<DoctorRouteGuard><Dashboard /></DoctorRouteGuard>} />
+            <Route path="/worker"            element={<WorkerRouteGuard><WorkerDashboard /></WorkerRouteGuard>} />
             <Route path="/patient"           element={<PatientDashboard />} />
-            <Route path="/intake"            element={<PatientIntakeFlow />} />
+            <Route path="/intake"            element={<WorkerRouteGuard><PatientIntakeFlow /></WorkerRouteGuard>} />
             <Route path="/referral-success"  element={<ReferralSuccess />} />
-            <Route path="/followups"         element={<CareGaps />} />
+            <Route path="/followups"         element={<WorkerRouteGuard><CareGaps /></WorkerRouteGuard>} />
             <Route path="/patients"          element={<PatientsRouteGuard />} />
             <Route path="/patients/:id"      element={<PatientProfileGuard />} />
-            <Route path="/queue"             element={<Queue />} />
-            <Route path="/facilities"        element={<FacilityReadiness />} />
+            <Route path="/queue"             element={<DoctorRouteGuard><Queue /></DoctorRouteGuard>} />
+            <Route path="/facilities"        element={<DoctorRouteGuard><FacilityReadiness /></DoctorRouteGuard>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/login" replace />} />
