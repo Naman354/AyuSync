@@ -146,8 +146,11 @@ function CounterReferralModal({
     setMedications(m => m.filter((_, idx) => idx !== i));
   };
 
-  // Get referralId: check if entry has a referral attached
+  // Resolve associated identifiers
   const referralId = entry.referralId || entry.referral?.id;
+  const patientId = entry.appointment?.patientId || entry.appointment?.patient?.id || entry.patientId || entry.patient?.id;
+  const facilityId = entry.appointment?.facilityId || entry.facilityId;
+  const queueEntryId = entry.id;
 
   const submit = async () => {
     if (!outcome.trim()) { setError('Please enter your consultation diagnosis or outcome.'); return; }
@@ -156,7 +159,10 @@ function CounterReferralModal({
     setSubmitting(true);
     try {
       await api.post('/followups/counter-referral', {
-        referralId: referralId || entry.id,
+        referralId: referralId || queueEntryId,
+        queueEntryId,
+        patientId,
+        facilityId,
         outcome,
         instructions,
         tasks: validTasks,
@@ -169,7 +175,13 @@ function CounterReferralModal({
       setSuccess(true);
       setTimeout(() => { onClose(); onSuccess(); }, 1200);
     } catch (e: any) {
-      setError(e.response?.data?.error || 'Could not submit care plan. Please try again.');
+      const msg =
+        e.response?.data?.message ||
+        e.response?.data?.error ||
+        (e.code === 'ECONNABORTED' ? 'The server took longer than expected to reply. Please refresh the queue to check the updated status.' : '') ||
+        e.message ||
+        'Could not submit care plan. Please try again.';
+      setError(msg);
     } finally {
       setSubmitting(false);
     }

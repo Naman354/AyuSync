@@ -4,7 +4,7 @@ import PageShell from '../components/ui/PageShell';
 import {
   Building2, Bed, RefreshCw, CheckCircle2,
   AlertTriangle, ShieldCheck, Stethoscope,
-  MapPin, Check
+  MapPin, Check, Plus, Minus
 } from 'lucide-react';
 
 export default function FacilityReadiness() {
@@ -12,6 +12,7 @@ export default function FacilityReadiness() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [adjustingBedId, setAdjustingBedId] = useState<string | null>(null);
 
   const fetchFacilities = async () => {
     try {
@@ -29,6 +30,61 @@ export default function FacilityReadiness() {
   useEffect(() => {
     fetchFacilities();
   }, []);
+
+  const adjustBeds = async (facilityId: string, delta: number) => {
+    setAdjustingBedId(facilityId);
+    setError('');
+
+    // Snapshot current facilities for rollback if API call fails
+    const prevFacilities = [...facilities];
+
+    // Optimistic UI update
+    setFacilities((prev) =>
+      prev.map((f) => {
+        if (f.id !== facilityId) return f;
+
+        const caps = f.capacities && f.capacities.length > 0
+          ? f.capacities.map((c: any) => ({ ...c }))
+          : [{ resource: 'General Inpatient Beds', total: 24, occupied: 14 }];
+
+        const targetCap = caps.find((c: any) => c.resource?.toLowerCase().includes('bed')) || caps[0];
+        const newOcc = Math.max(0, Math.min(targetCap.total, (targetCap.occupied || 0) + delta));
+        targetCap.occupied = newOcc;
+
+        const tot = caps.reduce((sum: number, c: any) => sum + (c.total || 0), 0);
+        const occ = caps.reduce((sum: number, c: any) => sum + (c.occupied || 0), 0);
+
+        let newStatus = f.availability?.status || 'OPEN';
+        let newScore = f.availability?.readinessScore ?? 85;
+        if (occ >= tot && tot > 0) {
+          newStatus = 'OVERCAPACITY';
+          newScore = 45;
+        } else if (newStatus === 'OVERCAPACITY' && occ < tot) {
+          newStatus = 'OPEN';
+          newScore = 88;
+        }
+
+        return {
+          ...f,
+          capacities: caps,
+          availability: {
+            ...f.availability,
+            status: newStatus,
+            readinessScore: newScore
+          }
+        };
+      })
+    );
+
+    try {
+      await api.put(`/facilities/${facilityId}/beds`, { delta });
+    } catch (e: any) {
+      setFacilities(prevFacilities);
+      setError(e.response?.data?.error || e.response?.data?.message || 'Failed to update bed count.');
+    } finally {
+      setAdjustingBedId(null);
+    }
+  };
 
   const updateAvailability = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'OPEN' ? 'OVERCAPACITY' : 'OPEN';
@@ -196,17 +252,17 @@ export default function FacilityReadiness() {
               return (
                 <div
                   key={fac.id}
-                  className="rounded-2xl border border-gray-100 bg-white shadow-xs p-6 flex flex-col justify-between space-y-5 hover:border-gray-200 transition-all"
+                  className="rounded-2xl border border-gray-100 bg-white shadow-xs p-6 flex flex-col justify-between space-y-5 hover:border-gray-200 transition-all overflow-hidden"
                 >
                   <div>
                     {/* Header */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    <div className="flex items-start justify-between gap-3 min-w-0">
+                      <div className="min-w-0 flex-1 pr-1">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 truncate">
                           {fac.type === 'COMMUNITY_HEALTH_CENTRE' ? 'Community Health Centre (CHC)' : fac.type || 'Primary Health Centre'}
                         </div>
-                        <h3 className="font-bold text-lg text-gray-900 mt-0.5">{fac.name}</h3>
-                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                        <h3 className="font-bold text-base sm:text-lg text-gray-900 mt-0.5 leading-snug break-words">{fac.name}</h3>
+                        <div className="flex items-center gap-1 text-xs text-gray-500 mt-1 min-w-0">
                           <MapPin size={12} className="text-gray-400 shrink-0" />
                           <span className="truncate">{fac.address || 'Baramati, Pune District, Maharashtra'}</span>
                         </div>
@@ -214,7 +270,7 @@ export default function FacilityReadiness() {
 
                       {/* Status Badge */}
                       <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shrink-0 ${
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 whitespace-nowrap ${
                           isOpen
                             ? 'bg-emerald-50 text-[#1e6641] border border-emerald-200'
                             : isOvercapacity
@@ -231,7 +287,7 @@ export default function FacilityReadiness() {
                       </span>
                     </div>
 
-                    {/* Visual Bed Occupancy */}
+                    {/* Visual Bed Occupancy & Adjustment Controls */}
                     <div className="mt-5 space-y-3 bg-gray-50/70 p-4 rounded-xl border border-gray-100">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-semibold text-gray-700 flex items-center gap-1.5">
@@ -256,9 +312,37 @@ export default function FacilityReadiness() {
                         />
                       </div>
 
-                      <div className="flex justify-between text-[11px] text-gray-500 pt-0.5">
-                        <span>Available: <strong>{Math.max(0, totalFacBeds - occupiedFacBeds)} beds</strong></span>
-                        <span>Readiness: <strong>{avail?.readinessScore ? `${Math.round(avail.readinessScore)}%` : '88%'}</strong></span>
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                        <span>Available: <strong className="text-gray-800">{Math.max(0, totalFacBeds - occupiedFacBeds)} beds</strong></span>
+                        <span>Readiness: <strong className="text-gray-800">{avail?.readinessScore ? `${Math.round(avail.readinessScore)}%` : '88%'}</strong></span>
+                      </div>
+
+                      {/* Manual Bed Adjustment Controls */}
+                      <div className="pt-2.5 border-t border-gray-200/70 flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-gray-600">Manual Bed Count:</span>
+                        <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-gray-200 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => adjustBeds(fac.id, -1)}
+                            disabled={occupiedFacBeds <= 0 || adjustingBedId === fac.id}
+                            title="Discharge / Free 1 occupied bed"
+                            className="w-6 h-6 flex items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                          >
+                            <Minus size={12} strokeWidth={2.5} />
+                          </button>
+                          <span className="text-xs font-bold text-gray-800 px-1 min-w-[28px] text-center select-none">
+                            {occupiedFacBeds}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => adjustBeds(fac.id, 1)}
+                            disabled={occupiedFacBeds >= totalFacBeds || adjustingBedId === fac.id}
+                            title="Admit / Occupy 1 bed"
+                            className="w-6 h-6 flex items-center justify-center rounded-md bg-[#1e6641] hover:bg-[#165032] text-white disabled:opacity-30 disabled:pointer-events-none transition-colors shadow-2xs"
+                          >
+                            <Plus size={12} strokeWidth={2.5} />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
