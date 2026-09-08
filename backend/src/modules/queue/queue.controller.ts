@@ -131,14 +131,30 @@ export const updateQueueStatus = async (req: Request, res: Response) => {
 
     // Define allowed transitions
     const VALID_QUEUE_TRANSITIONS: Record<string, string[]> = {
-      'WAITING': ['IN_CONSULTATION', 'CANCELLED'],
-      'PRIORITY': ['IN_CONSULTATION', 'CANCELLED'],
-      'IN_CONSULTATION': ['COMPLETED']
+      'WAITING': ['IN_CONSULTATION', 'CANCELLED', 'COMPLETED'],
+      'PRIORITY': ['IN_CONSULTATION', 'CANCELLED', 'COMPLETED'],
+      'IN_CONSULTATION': ['WAITING', 'COMPLETED', 'CANCELLED']
     };
 
     const allowed = VALID_QUEUE_TRANSITIONS[currentStatus] || [];
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: 'Invalid Transition', message: `Cannot transition from ${currentStatus} to ${status}` });
+    }
+
+    // In a single-doctor consultation room, starting a consultation on a patient completes any other active consultation
+    if (status === 'IN_CONSULTATION') {
+      try {
+        await prisma.queueEntry.updateMany({
+          where: {
+            id: { not: id },
+            status: 'IN_CONSULTATION',
+            ...(queueEntry.doctorId ? { doctorId: queueEntry.doctorId } : {})
+          },
+          data: { status: 'COMPLETED' }
+        });
+      } catch (multiErr) {
+        console.warn('[Queue] Note: could not auto-complete previous in-consultation entries:', multiErr);
+      }
     }
 
     const updated = await prisma.queueEntry.update({

@@ -49,7 +49,7 @@ export default function Login() {
       if (data.user.role === 'WORKER') {
         navigate('/worker');
       } else if (data.user.role === 'PATIENT') {
-        navigate(data.user.patientId ? `/patients/${data.user.patientId}` : '/patients');
+        navigate('/patient');
       } else {
         navigate('/dashboard');
       }

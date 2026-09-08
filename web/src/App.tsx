@@ -105,7 +105,12 @@ const ProtectedRoute = () => {
     else window.location.href = '/dashboard';
   };
 
-  const displayName = user.name || (isWorker ? 'Sunita Patil' : isPatient ? 'Ramesh Kulkarni' : 'Dr. Rajesh Deshmukh');
+  const isDoctor = !isWorker && !isPatient;
+  const displayName = isDoctor
+    ? (user.name && (user.name.startsWith('Dr') || user.name.includes('Deshmukh') || user.name.includes('Joshi')) ? user.name : 'Dr. Rajesh Deshmukh')
+    : isWorker
+    ? (user.name && !user.name.includes('Dr') ? user.name : 'Sunita Patil')
+    : (user.name && !user.name.includes('Dr') ? user.name : 'Ramesh Kulkarni');
 
   return (
     <div className="min-h-screen bg-[#f8f7f3] font-sans text-gray-900">
@@ -314,6 +319,14 @@ function PatientsRouteGuard() {
   return <Patients />;
 }
 
+function PatientProfileGuard() {
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  if (user.role === 'PATIENT') {
+    return <Navigate to="/patient" replace />;
+  }
+  return <PatientProfile />;
+}
+
 // ─── Root app ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [splashDone, setSplashDone] = useState(
@@ -341,7 +354,7 @@ export default function App() {
             <Route path="/referral-success"  element={<ReferralSuccess />} />
             <Route path="/followups"         element={<CareGaps />} />
             <Route path="/patients"          element={<PatientsRouteGuard />} />
-            <Route path="/patients/:id"      element={<PatientProfile />} />
+            <Route path="/patients/:id"      element={<PatientProfileGuard />} />
             <Route path="/queue"             element={<Queue />} />
             <Route path="/facilities"        element={<FacilityReadiness />} />
           </Route>
