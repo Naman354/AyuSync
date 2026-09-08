@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/models/assessment_model.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../widgets/voice_input.dart';
 
 class AssessmentFormPage extends StatefulWidget {
@@ -59,7 +60,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
       bloodGlucose: double.tryParse(_glucoseController.text.trim()),
     );
 
-    await appState.createAssessmentAsync(
+    await appState.createAssessment(
       patientId: patient.id,
       primarySymptom: _symptomController.text.trim(),
       severity: _severity,
@@ -71,12 +72,12 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     if (!mounted) return;
     setState(() => _isProcessing = false);
 
-    // 09 Internet? Decision Branch (from Figma flowchart)
+    // Decision Branch
     if (!appState.isOnline) {
-      // 09 Internet? -> NO -> 10 Saved Offline -> 11 Sync Queue
+      // Saved Offline -> Sync Queue
       Navigator.pushReplacementNamed(context, '/assessment/saved_offline');
     } else {
-      // 09 Internet? -> YES -> 11 Sync / Upload -> 12 AI Triage + Reasoning
+      // Uploaded -> AI Triage + Reasoning
       Navigator.pushReplacementNamed(context, '/triage/ai_result');
     }
   }
@@ -87,25 +88,48 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     final patient = appState.currentPatient ?? (appState.patients.isNotEmpty ? appState.patients.first : null);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Symptoms & Health Readings'),
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
+        title: const Text('Clinical Assessment & Vitals', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.forest,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.forest, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           // Connectivity indicator banner
           Container(
-            margin: const EdgeInsets.only(right: 12),
+            margin: const EdgeInsets.only(right: 14),
             alignment: Alignment.center,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: appState.isOnline ? Colors.green.shade700 : Colors.amber.shade800,
+                color: appState.isOnline ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: appState.isOnline ? const Color(0xFFBBF7D0) : const Color(0xFFFDE68A),
+                ),
               ),
-              child: Text(
-                appState.isOnline ? 'Online Sync' : 'Offline Mode',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    appState.isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                    size: 14,
+                    color: appState.isOnline ? const Color(0xFF166534) : const Color(0xFF92400E),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    appState.isOnline ? 'Online Sync' : 'Offline Mode',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: appState.isOnline ? const Color(0xFF166534) : const Color(0xFF92400E),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -123,18 +147,31 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
+                    color: AppColors.mintLight,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.forest.withValues(alpha: 0.2)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.person, color: Color(0xFF2563EB)),
-                      const SizedBox(width: 8),
+                      const CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.white,
+                        child: Icon(Icons.person_rounded, color: AppColors.forest, size: 20),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          'Assessing: ${patient.name} (${patient.age}y, ${patient.gender}) • Village: ${patient.village}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              patient.name,
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.textDark),
+                            ),
+                            Text(
+                              '${patient.age} yrs • ${patient.gender} • Village: ${patient.village}',
+                              style: const TextStyle(fontSize: 12, color: AppColors.textMedium, fontWeight: FontWeight.w500),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -143,7 +180,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
               const SizedBox(height: 16),
 
               // Vernacular Voice Input
-              const Text('Voice Input (Speak in your language)', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Voice Input (Vernacular Assistant)', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               VernacularVoiceInput(
                 onTranscriptionResult: _handleVoiceTranscription,
@@ -155,7 +192,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                 controller: _symptomController,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  labelText: 'Main Symptoms / Problems *',
+                  labelText: 'Primary Clinical Symptoms *',
                   hintText: 'Describe chief complaint (e.g. High fever, chest pain)',
                   prefixIcon: Icon(Icons.healing_outlined),
                   border: OutlineInputBorder(),
@@ -205,7 +242,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
 
               // Physiological Vitals Section
               const Text(
-                'Vital Signs (Health Readings)',
+                'Physiological Vitals',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
               ),
               const SizedBox(height: 12),
@@ -307,7 +344,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
               TextFormField(
                 controller: _notesController,
                 decoration: const InputDecoration(
-                  labelText: 'Your Observations & Notes',
+                  labelText: 'Worker Clinical Observations & Notes',
                   hintText: 'e.g. Patient appeared dehydrated, walking with difficulty',
                   prefixIcon: Icon(Icons.notes_outlined),
                   border: OutlineInputBorder(),
@@ -318,10 +355,11 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
               // Flow Action Button
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: AppColors.forest,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
                 onPressed: _isProcessing ? null : _submitAssessment,
                 icon: _isProcessing
@@ -330,16 +368,12 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                         height: 20,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                       )
-                    : Icon(appState.isOnline ? Icons.auto_awesome : Icons.save_alt),
-                label: Flexible(
-                  child: Text(
-                    appState.isOnline
-                        ? 'Analyze Symptoms & Get Guidance'
-                        : 'Save Offline (Upload Later)',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    : Icon(appState.isOnline ? Icons.auto_awesome_rounded : Icons.save_rounded),
+                label: Text(
+                  appState.isOnline
+                      ? 'Process Clinical Triage'
+                      : 'Save Assessment to Offline Queue',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

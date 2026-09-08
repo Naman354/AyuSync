@@ -64,6 +64,10 @@ class FollowUpTask {
     );
   }
 
+  bool get isCompleted => status.toUpperCase() == 'COMPLETED';
+  String get reason => taskDescription;
+  String get notes => (visitNotes != null && visitNotes!.isNotEmpty) ? visitNotes! : instructions;
+
   FollowUpTask copyWith({
     String? status,
     String? visitNotes,

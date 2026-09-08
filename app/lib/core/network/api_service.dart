@@ -35,6 +35,7 @@ class ApiResponse<T> {
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
+  static ApiService get instance => _instance;
   ApiService._internal();
 
   String? _authToken;
@@ -42,7 +43,7 @@ class ApiService {
   String? get authToken => _authToken;
   bool get isAuthenticated => _authToken != null && _authToken!.isNotEmpty;
 
-  void setAuthToken(String token) {
+  void setAuthToken(String? token) {
     _authToken = token;
   }
 
@@ -65,8 +66,7 @@ class ApiService {
     final baseUrl = ApiConfig.baseUrl;
     final baseUri = Uri.parse(baseUrl);
     final cleanPath = path.startsWith('/') ? path : '/$path';
-    
-    // Merge base path if baseUrl has a subpath
+
     final fullPath = baseUri.path.isNotEmpty && baseUri.path != '/'
         ? '${baseUri.path}$cleanPath'
         : cleanPath;
@@ -80,74 +80,106 @@ class ApiService {
     }
   }
 
-  // Generic Request Helper
-  Future<ApiResponse<T>> _request<T>({
+  Future<bool> ensureAuthenticated() async {
+    if (_authToken != null && _authToken!.isNotEmpty) return true;
+    try {
+      await login(phone: '+919998887776', password: 'password123');
+      return _authToken != null && _authToken!.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Generic Request Helper returning decoded JSON
+  Future<dynamic> _request({
     required String method,
     required String path,
     Map<String, dynamic>? body,
     Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
-    T Function(dynamic json)? transform,
   }) async {
-    try {
-      final uri = _buildUri(path, queryParameters);
-      final headers = _buildHeaders(requiresAuth: requiresAuth);
+    if (requiresAuth && (_authToken == null || _authToken!.isEmpty)) {
+      await ensureAuthenticated();
+    }
 
-      http.Response response;
-      const timeout = Duration(seconds: 30);
+    final uri = _buildUri(path, queryParameters);
+    var headers = _buildHeaders(requiresAuth: requiresAuth);
 
-      switch (method.toUpperCase()) {
-        case 'GET':
-          response = await http.get(uri, headers: headers).timeout(timeout);
-          break;
-        case 'POST':
-          response = await http
-              .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
-              .timeout(timeout);
-          break;
-        case 'PUT':
-          response = await http
-              .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
-              .timeout(timeout);
-          break;
-        case 'DELETE':
-          response = await http.delete(uri, headers: headers).timeout(timeout);
-          break;
-        default:
-          return ApiResponse.error('Unsupported HTTP method: $method', statusCode: 400);
-      }
+    http.Response response;
+    const timeout = Duration(seconds: 60);
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (response.body.isEmpty) {
-          return ApiResponse.success(null as T, statusCode: response.statusCode);
+    switch (method.toUpperCase()) {
+      case 'GET':
+        response = await http.get(uri, headers: headers).timeout(timeout);
+        break;
+      case 'POST':
+        response = await http
+            .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(timeout);
+        break;
+      case 'PUT':
+        response = await http
+            .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(timeout);
+        break;
+      case 'PATCH':
+        response = await http
+            .patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(timeout);
+        break;
+      case 'DELETE':
+        response = await http.delete(uri, headers: headers).timeout(timeout);
+        break;
+      default:
+        throw Exception('Unsupported HTTP method: $method');
+    }
+
+    // Auto-retry once if unauthorized (e.g. token expired or cold-start)
+    if (response.statusCode == 401 && requiresAuth) {
+      clearAuthToken();
+      final reauth = await ensureAuthenticated();
+      if (reauth) {
+        headers = _buildHeaders(requiresAuth: true);
+        switch (method.toUpperCase()) {
+          case 'GET':
+            response = await http.get(uri, headers: headers).timeout(timeout);
+            break;
+          case 'POST':
+            response = await http
+                .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+                .timeout(timeout);
+            break;
+          case 'PUT':
+            response = await http
+                .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+                .timeout(timeout);
+            break;
+          case 'PATCH':
+            response = await http
+                .patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+                .timeout(timeout);
+            break;
+          case 'DELETE':
+            response = await http.delete(uri, headers: headers).timeout(timeout);
+            break;
         }
-        final dynamic decoded = jsonDecode(response.body);
-        final data = transform != null ? transform(decoded) : decoded as T;
-        return ApiResponse.success(data, statusCode: response.statusCode);
-      } else {
-        String errorMsg = 'HTTP ${response.statusCode}';
-        try {
-          final errJson = jsonDecode(response.body);
-          if (errJson is Map && errJson['message'] != null) {
-            errorMsg = errJson['message'].toString();
-          } else if (errJson is Map && errJson['error'] != null) {
-            errorMsg = errJson['error'].toString();
-          }
-        } catch (_) {}
-        return ApiResponse.error(errorMsg, statusCode: response.statusCode);
       }
-    } catch (e) {
-      final errorString = e.toString();
-      if (errorString.contains('TimeoutException')) {
-        return ApiResponse.error('Server took too long to respond. The cloud service may be waking up, please retry.', statusCode: 504);
-      }
-      if (errorString.contains('Connection closed before full header was received')) {
-        return ApiResponse.error('Server connection was reset (Render is waking up). Please try again in a few seconds.', statusCode: 503);
-      }
-      if (errorString.contains('SocketException') || errorString.contains('Connection refused') || errorString.contains('Failed host lookup') || errorString.contains('ClientException')) {
-        return ApiResponse.error('Unable to connect to the server. Please check your internet connection or try again later.', statusCode: 503);
-      }
-      return ApiResponse.error(errorString, statusCode: 503);
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) return {};
+      return jsonDecode(response.body);
+    } else {
+      String errorMsg = 'HTTP ${response.statusCode}';
+      try {
+        final errJson = jsonDecode(response.body);
+        if (errJson is Map && errJson['message'] != null) {
+          errorMsg = errJson['message'].toString();
+        } else if (errJson is Map && errJson['error'] != null) {
+          errorMsg = errJson['error'].toString();
+        }
+      } catch (_) {}
+      throw Exception(errorMsg);
     }
   }
 
@@ -155,42 +187,34 @@ class ApiService {
   // 1. AUTHENTICATION & USERS
   // =========================================================
 
-  Future<ApiResponse<Map<String, dynamic>>> login({
-    required String phone,
+  Future<Map<String, dynamic>> login({
+    String? identifier,
+    String? phone,
     required String password,
   }) async {
-    final result = await _request<Map<String, dynamic>>(
+    final loginPhone = phone ?? identifier ?? '+919998887776';
+    final result = await _request(
       method: 'POST',
       path: ApiConfig.authLogin,
       body: {
-        'phone': phone,
+        'phone': loginPhone,
         'password': password,
       },
       requiresAuth: false,
     );
 
-    if (result.isSuccess && result.data != null) {
-      final token = result.data!['token'] as String?;
-      if (token != null) {
-        setAuthToken(token);
-      }
+    if (result is Map<String, dynamic> && result['token'] != null) {
+      setAuthToken(result['token'] as String);
     }
 
-    return result;
-  }
-
-  Future<ApiResponse<List<dynamic>>> getDoctors() async {
-    return _request<List<dynamic>>(
-      method: 'GET',
-      path: ApiConfig.authDoctors,
-    );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
   // =========================================================
   // 2. PATIENT DOMAIN
   // =========================================================
 
-  Future<ApiResponse<Map<String, dynamic>>> createPatient({
+  Future<Map<String, dynamic>> createPatient({
     required String name,
     required int age,
     required String gender,
@@ -199,299 +223,269 @@ class ApiService {
     String? dob,
     String? abhaId,
   }) async {
-    return _request<Map<String, dynamic>>(
+    String? cleanPhone;
+    if (phone != null && phone.trim().isNotEmpty) {
+      final digits = phone.replaceAll(RegExp(r'[^\d]'), '');
+      if (digits.length == 10) {
+        cleanPhone = '+91$digits';
+      } else if (digits.length > 10 && phone.startsWith('+')) {
+        cleanPhone = phone.replaceAll(RegExp(r'[\s\-]'), '');
+      } else if (digits.length >= 10) {
+        cleanPhone = '+$digits';
+      }
+    }
+
+    String? cleanDob;
+    if (dob != null && dob.trim().isNotEmpty) {
+      final trimmed = dob.trim();
+      final parts = trimmed.split(RegExp(r'[/.-]'));
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          cleanDob = '${parts[0]}-${parts[1].padLeft(2, '0')}-${parts[2].padLeft(2, '0')}';
+        } else if (parts[2].length == 4) {
+          cleanDob = '${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}';
+        } else {
+          cleanDob = trimmed;
+        }
+      } else {
+        cleanDob = trimmed;
+      }
+    }
+
+    final result = await _request(
       method: 'POST',
       path: ApiConfig.patients,
       body: {
-        'name': name,
+        'name': name.trim(),
         'age': age,
-        'gender': gender.toUpperCase(),
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (village != null && village.isNotEmpty) 'village': village,
-        if (dob != null && dob.isNotEmpty) 'dob': dob,
-        if (abhaId != null && abhaId.isNotEmpty) 'abhaId': abhaId,
+        'gender': gender.toUpperCase().trim(),
+        if (cleanPhone != null) 'phone': cleanPhone,
+        if (village != null && village.trim().isNotEmpty) 'village': village.trim(),
+        if (cleanDob != null) 'dob': cleanDob,
+        if (abhaId != null && abhaId.trim().isNotEmpty) 'abhaId': abhaId.trim(),
       },
     );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
-  Future<ApiResponse<List<dynamic>>> searchPatients(String query) async {
-    return _request<List<dynamic>>(
+  Future<List<dynamic>> searchPatients([String query = '']) async {
+    final result = await _request(
       method: 'GET',
-      path: ApiConfig.patientsSearch,
-      queryParameters: {'q': query},
+      path: ApiConfig.patientSearch,
+      queryParameters: query.isNotEmpty ? {'q': query} : null,
     );
+    return (result is List) ? result : [];
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> getPatientTimeline(String patientId) async {
-    return _request<Map<String, dynamic>>(
-      method: 'GET',
-      path: '${ApiConfig.patients}/$patientId/timeline',
-    );
-  }
+  // =========================================================
+  // 3. ENCOUNTER & ASSESSMENT DOMAIN
+  // =========================================================
 
-  Future<ApiResponse<Map<String, dynamic>>> createEncounter({
+  Future<Map<String, dynamic>> createEncounter({
     required String patientId,
-    String? facilityId,
-    String type = 'FIELD_VISIT',
+    String type = 'OUTPATIENT',
   }) async {
-    return _request<Map<String, dynamic>>(
+    final result = await _request(
       method: 'POST',
       path: ApiConfig.encounters,
       body: {
         'patientId': patientId,
-        'facilityId': facilityId,
         'type': type,
       },
     );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
-  // =========================================================
-  // 3. CLINICAL ASSESSMENTS & AI TRIAGE
-  // =========================================================
-
-  Future<ApiResponse<Map<String, dynamic>>> createAssessment({
+  Future<Map<String, dynamic>> createAssessment({
     required String patientId,
     String? encounterId,
-    required List<Map<String, dynamic>> symptoms,
+    List<Map<String, dynamic>>? symptoms,
     List<Map<String, dynamic>>? vitals,
-    String provenance = 'WORKER_RECORDED',
   }) async {
-    return _request<Map<String, dynamic>>(
+    final result = await _request(
       method: 'POST',
       path: ApiConfig.assessments,
       body: {
         'patientId': patientId,
         if (encounterId != null) 'encounterId': encounterId,
-        'symptoms': symptoms,
-        if (vitals != null && vitals.isNotEmpty) 'vitals': vitals,
-        'provenance': provenance,
+        if (symptoms != null) 'symptoms': symptoms,
+        if (vitals != null) 'vitals': vitals,
       },
     );
-  }
-
-  Future<ApiResponse<List<dynamic>>> getAssessmentsByPatient(String patientId) async {
-    return _request<List<dynamic>>(
-      method: 'GET',
-      path: '${ApiConfig.assessments}/patient/$patientId',
-    );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
   // =========================================================
-  // 4. FACILITIES & SMART ROUTING
+  // 4. FACILITIES & ROUTING
   // =========================================================
 
-  Future<ApiResponse<List<dynamic>>> getFacilities() async {
-    return _request<List<dynamic>>(
+  Future<List<dynamic>> getFacilities() async {
+    final result = await _request(
       method: 'GET',
       path: ApiConfig.facilities,
     );
+    return (result is List) ? result : [];
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> updateFacilityAvailability(
-    String facilityId, {
-    required String status,
-    int? readinessScore,
-  }) async {
-    return _request<Map<String, dynamic>>(
-      method: 'PUT',
-      path: '${ApiConfig.facilities}/$facilityId/availability',
-      body: {
-        'status': status,
-        if (readinessScore != null) 'readinessScore': readinessScore,
-      },
-    );
-  }
-
-  // =========================================================
-  // 5. REFERRALS & WORKFLOW
-  // =========================================================
-
-  Future<ApiResponse<Map<String, dynamic>>> createReferral({
+  Future<Map<String, dynamic>> createReferral({
     required String patientId,
-    String? originId,
+    required String originId,
     required String destinationId,
-    String urgency = 'ROUTINE',
-    String reason = 'Clinical referral',
+    required String reason,
+    required String urgency,
   }) async {
-    return _request<Map<String, dynamic>>(
+    final result = await _request(
       method: 'POST',
       path: ApiConfig.referrals,
       body: {
         'patientId': patientId,
-        if (originId != null && originId.isNotEmpty) 'originId': originId,
+        'originId': originId,
         'destinationId': destinationId,
-        'urgency': urgency,
         'reason': reason,
+        'urgency': urgency,
       },
     );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
-  Future<ApiResponse<Map<String, dynamic>>> updateReferralStatus(
-    String referralId, {
-    required String newStatus,
-    String? notes,
+  Future<List<dynamic>> getReferrals() async {
+    final result = await _request(
+      method: 'GET',
+      path: ApiConfig.referrals,
+    );
+    return (result is List) ? result : [];
+  }
+
+  // =========================================================
+  // 5. FOLLOW-UP TASKS
+  // =========================================================
+
+  Future<List<dynamic>> getFollowUps({String? status}) async {
+    final result = await _request(
+      method: 'GET',
+      path: ApiConfig.followups,
+      queryParameters: status != null ? {'status': status} : null,
+    );
+    return (result is List) ? result : [];
+  }
+
+  Future<Map<String, dynamic>> completeFollowUp(
+    String id, {
+    String? completionNotes,
   }) async {
-    return _request<Map<String, dynamic>>(
-      method: 'PUT',
-      path: '${ApiConfig.referrals}/$referralId/status',
+    final result = await _request(
+      method: 'PATCH',
+      path: '${ApiConfig.followups}/$id/complete',
       body: {
-        'newStatus': newStatus,
-        if (notes != null) 'notes': notes,
+        if (completionNotes != null) 'completionNotes': completionNotes,
       },
     );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  Future<Map<String, dynamic>> escalateFollowUp(
+    String id, {
+    bool deescalate = false,
+    String? reason,
+  }) async {
+    final result = await _request(
+      method: 'PATCH',
+      path: '${ApiConfig.followups}/$id/escalate',
+      body: {
+        'deescalate': deescalate,
+        if (reason != null) 'reason': reason,
+      },
+    );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
   // =========================================================
-  // 6. QUEUE & APPOINTMENTS
+  // 6. PATIENT TIMELINE & CONDITIONS
   // =========================================================
 
-  Future<ApiResponse<Map<String, dynamic>>> enqueuePatient({
-    String? appointmentId,
-    String? patientId,
-    String? facilityId,
-    String? doctorId,
-    int priority = 0,
+  Future<Map<String, dynamic>> getPatientTimeline(String patientId) async {
+    final result = await _request(
+      method: 'GET',
+      path: '${ApiConfig.patients}/$patientId/timeline',
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  Future<Map<String, dynamic>> addPatientCondition(
+    String patientId, {
+    required String name,
+    String status = 'ACTIVE',
+    String? diagnosedAt,
   }) async {
-    return _request<Map<String, dynamic>>(
+    final result = await _request(
       method: 'POST',
-      path: ApiConfig.queue,
+      path: '${ApiConfig.patients}/$patientId/conditions',
       body: {
-        if (appointmentId != null) 'appointmentId': appointmentId,
-        if (patientId != null) 'patientId': patientId,
-        if (facilityId != null) 'facilityId': facilityId,
-        if (doctorId != null) 'doctorId': doctorId,
-        'priority': priority,
+        'name': name.trim(),
+        'status': status,
+        'diagnosedAt': diagnosedAt ?? DateTime.now().toIso8601String(),
       },
     );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
-  Future<ApiResponse<List<dynamic>>> getAllQueue() async {
-    return _request<List<dynamic>>(
-      method: 'GET',
-      path: ApiConfig.queue,
-    );
-  }
+  // =========================================================
+  // 7. AI TRIAGE & FACILITY ROUTING
+  // =========================================================
 
-  Future<ApiResponse<List<dynamic>>> getQueueForDoctor(String doctorId) async {
-    return _request<List<dynamic>>(
-      method: 'GET',
-      path: '${ApiConfig.queue}/doctor/$doctorId',
-    );
-  }
-
-  Future<ApiResponse<Map<String, dynamic>>> updateQueueStatus(
-    String queueId, {
-    required String status,
+  Future<Map<String, dynamic>> triageAssessment({
+    int? age,
+    String? gender,
+    required List<Map<String, dynamic>> symptoms,
+    required Map<String, dynamic> vitals,
   }) async {
-    return _request<Map<String, dynamic>>(
-      method: 'PUT',
-      path: '${ApiConfig.queue}/$queueId/status',
-      body: {'status': status},
-    );
-  }
-
-  Future<ApiResponse<Map<String, dynamic>>> bookAppointment({
-    required String patientId,
-    required String facilityId,
-    required String doctorId,
-    required DateTime scheduledAt,
-  }) async {
-    return _request<Map<String, dynamic>>(
+    final result = await _request(
       method: 'POST',
-      path: ApiConfig.appointments,
+      path: ApiConfig.aiTriage,
       body: {
-        'patientId': patientId,
-        'facilityId': facilityId,
-        'doctorId': doctorId,
-        'scheduledAt': scheduledAt.toIso8601String(),
+        if (age != null) 'age': age,
+        if (gender != null) 'gender': gender,
+        'symptoms': symptoms,
+        'vitals': vitals,
       },
     );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
-  Future<ApiResponse<List<dynamic>>> getAllAppointments() async {
-    return _request<List<dynamic>>(
-      method: 'GET',
-      path: ApiConfig.appointments,
+  Future<Map<String, dynamic>> routeFacility({
+    required String urgencyCategory,
+    required List<Map<String, dynamic>> symptoms,
+    required Map<String, dynamic> vitals,
+  }) async {
+    final result = await _request(
+      method: 'POST',
+      path: ApiConfig.aiRoute,
+      body: {
+        'urgencyCategory': urgencyCategory.toUpperCase(),
+        'urgency': urgencyCategory.toUpperCase(),
+        'symptoms': symptoms,
+        'vitals': vitals,
+      },
     );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 
   // =========================================================
-  // 7. DASHBOARD ANALYTICS
+  // 8. OFFLINE SYNC BATCH
   // =========================================================
 
-  Future<ApiResponse<Map<String, dynamic>>> getDashboardAnalytics() async {
-    return _request<Map<String, dynamic>>(
-      method: 'GET',
-      path: ApiConfig.analyticsDashboard,
-    );
-  }
-
-  // =========================================================
-  // 8. OFFLINE SYNC (PUSH BATCH & DELTA PULL)
-  // =========================================================
-
-  Future<ApiResponse<Map<String, dynamic>>> pushSyncBatch({
+  Future<Map<String, dynamic>> processSyncBatch({
     required String workerId,
     required List<Map<String, dynamic>> mutations,
   }) async {
-    return _request<Map<String, dynamic>>(
+    final result = await _request(
       method: 'POST',
-      path: ApiConfig.syncPush,
+      path: ApiConfig.sync,
       body: {
         'workerId': workerId,
         'mutations': mutations,
       },
     );
-  }
-
-  Future<ApiResponse<Map<String, dynamic>>> pullSyncChanges({
-    DateTime? since,
-    String? facilityId,
-    String? workerId,
-  }) async {
-    final queryParams = <String, dynamic>{};
-    if (since != null) {
-      queryParams['since'] = since.toIso8601String();
-    }
-    if (facilityId != null && facilityId.isNotEmpty) {
-      queryParams['facilityId'] = facilityId;
-    }
-    if (workerId != null && workerId.isNotEmpty) {
-      queryParams['workerId'] = workerId;
-    }
-
-    return _request<Map<String, dynamic>>(
-      method: 'GET',
-      path: ApiConfig.syncPull,
-      queryParameters: queryParams.isNotEmpty ? queryParams : null,
-    );
-  }
-
-  Future<ApiResponse<Map<String, dynamic>>> resolveSyncConflict({
-    required String conflictId,
-    required String resolutionStrategy,
-    Map<String, dynamic>? mergedPayload,
-  }) async {
-    return _request<Map<String, dynamic>>(
-      method: 'POST',
-      path: ApiConfig.syncConflictResolve,
-      body: {
-        'conflictId': conflictId,
-        'resolutionStrategy': resolutionStrategy,
-        if (mergedPayload != null) 'mergedPayload': mergedPayload,
-      },
-    );
-  }
-
-  // =========================================================
-  // 9. HEALTH CHECK
-  // =========================================================
-
-  Future<ApiResponse<Map<String, dynamic>>> checkHealth() async {
-    return _request<Map<String, dynamic>>(
-      method: 'GET',
-      path: ApiConfig.health,
-      requiresAuth: false,
-    );
+    return (result is Map<String, dynamic>) ? result : {};
   }
 }

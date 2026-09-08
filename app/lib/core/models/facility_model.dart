@@ -100,6 +100,7 @@ class ReferralCase {
   final String chiefComplaint;
   final DateTime submittedAt;
   final String status; // SUBMITTED, ACCEPTED, SCHEDULED, IN_CONSULTATION, COMPLETED
+  final bool needsAmbulance;
 
   ReferralCase({
     required this.referralId,
@@ -110,6 +111,7 @@ class ReferralCase {
     required this.chiefComplaint,
     DateTime? submittedAt,
     this.status = 'SUBMITTED',
+    this.needsAmbulance = false,
   }) : submittedAt = submittedAt ?? DateTime.now();
 
   factory ReferralCase.fromBackendMap(Map<String, dynamic> map, {Facility? fallbackFacility, String? fallbackPatientName}) {

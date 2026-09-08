@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
+import '../../../../core/theme/app_colors.dart';
 
 class SavedOfflinePage extends StatelessWidget {
   const SavedOfflinePage({super.key});
@@ -11,42 +12,46 @@ class SavedOfflinePage extends StatelessWidget {
     final pendingCount = appState.syncQueue.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Saved Offline'),
-        backgroundColor: const Color(0xFFD97706), // Amber warning
-        foregroundColor: Colors.white,
+        title: const Text('Saved to Offline Storage', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.forest,
+        elevation: 0,
+        automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.offline_pin,
-                  size: 72,
-                  color: Colors.amber.shade900,
+              const SizedBox(height: 20),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.offline_pin_rounded,
+                    size: 64,
+                    color: Color(0xFFD97706),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
               const Text(
                 'Assessment Saved Offline',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textDark),
               ),
               const SizedBox(height: 10),
-              Text(
-                'This record is saved safely on your device. It will automatically upload to the hospital when internet is restored.',
+              const Text(
+                'Your assessment data is safely recorded in the local phone database. No internet connection was detected.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade700, height: 1.4),
+                style: TextStyle(fontSize: 14, color: Color(0xFF4B5563), height: 1.4),
               ),
               const SizedBox(height: 24),
 
@@ -55,21 +60,29 @@ class SavedOfflinePage extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.shade300),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFDE68A), width: 1.5),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.pending_actions, color: Colors.amber.shade900, size: 28),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.pending_actions_rounded, color: Color(0xFFD97706), size: 24),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Pending Sync Queue', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Offline Sync Queue', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.textDark)),
+                          const SizedBox(height: 2),
                           Text(
-                            '$pendingCount items awaiting internet connection',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                            '$pendingCount items awaiting mobile network',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                           ),
                         ],
                       ),
@@ -79,31 +92,41 @@ class SavedOfflinePage extends StatelessWidget {
               ),
               const SizedBox(height: 32),
 
-              // Navigate to 11 Sync Queue as per Figma flow
+              // Navigate to Sync Queue
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: AppColors.forest,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
                 onPressed: () {
                   Navigator.pushReplacementNamed(context, '/sync_queue');
                 },
-                icon: const Icon(Icons.sync),
+                icon: const Icon(Icons.sync_rounded),
                 label: const Text(
-                  'View Offline Upload Queue',
+                  'View Offline Sync Queue',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 12),
 
               OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.forest,
+                  side: const BorderSide(color: AppColors.forest, width: 1.2),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
                 onPressed: () {
                   Navigator.pushReplacementNamed(context, '/dashboard');
                 },
                 icon: const Icon(Icons.home_outlined),
-                label: const Text('Back to Home Dashboard'),
+                label: const Text(
+                  'Return to Home Dashboard',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                ),
               ),
             ],
           ),

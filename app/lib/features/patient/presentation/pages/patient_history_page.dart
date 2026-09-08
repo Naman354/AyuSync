@@ -1,26 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
+import '../../../../core/theme/app_colors.dart';
 
-class PatientHistoryPage extends StatefulWidget {
+class PatientHistoryPage extends StatelessWidget {
   const PatientHistoryPage({super.key});
-
-  @override
-  State<PatientHistoryPage> createState() => _PatientHistoryPageState();
-}
-
-class _PatientHistoryPageState extends State<PatientHistoryPage> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appState = Provider.of<AppState>(context, listen: false);
-      final patient = appState.currentPatient ?? (appState.patients.isNotEmpty ? appState.patients.first : null);
-      if (patient != null) {
-        appState.fetchPatientTimeline(patient.id);
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +13,12 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
 
     if (patient == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('16 Patient History')),
+        appBar: AppBar(
+          title: const Text('Patient Health History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.forest,
+          elevation: 0,
+        ),
         body: const Center(child: Text('No patient selected')),
       );
     }
@@ -37,11 +26,12 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
     final historyList = appState.getAssessmentsForPatient(patient.id);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Patient Visit History'),
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
+        title: const Text('Patient Health History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.forest,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -53,10 +43,10 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
               children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor: Colors.blue.shade100,
+                  backgroundColor: AppColors.mintLight,
                   child: Text(
                     patient.name.isNotEmpty ? patient.name[0] : 'P',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.forest),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -64,12 +54,12 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(patient.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(patient.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                       const SizedBox(height: 2),
-                      Text('${patient.age} yrs • ${patient.gender} • Village: ${patient.village}'),
+                      Text('${patient.age} yrs • ${patient.gender} • Village: ${patient.village}', style: const TextStyle(color: Color(0xFF4B5563))),
                       Text(
                         'ABHA: ${patient.abhaId ?? "Not Linked"}',
-                        style: TextStyle(fontSize: 12, color: Colors.blue.shade700, fontWeight: FontWeight.w500),
+                        style: const TextStyle(fontSize: 12, color: AppColors.forest, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -86,7 +76,7 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
                 const Icon(Icons.history, size: 18, color: Color(0xFF1E293B)),
                 const SizedBox(width: 6),
                 const Text(
-                  'Past Visits & Checkup Records',
+                  'Longitudinal Clinical Encounters',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                 ),
                 const Spacer(),
@@ -104,9 +94,9 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
                       children: [
                         Icon(Icons.assignment_late_outlined, size: 56, color: Colors.grey.shade400),
                         const SizedBox(height: 12),
-                        const Text('No past checkup records for this patient.'),
+                        const Text('No prior assessment records for this citizen.'),
                         const SizedBox(height: 4),
-                        const Text('Start a new health checkup below.', style: TextStyle(color: Colors.grey)),
+                        const Text('Start a fresh triage session below.', style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                   )
@@ -196,7 +186,7 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
                   ),
           ),
 
-          // Bottom Action Bar to start 08 Symptoms + Vitals
+          // Bottom Action Bar to start Assessment
           Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -211,18 +201,18 @@ class _PatientHistoryPageState extends State<PatientHistoryPage> {
             ),
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: AppColors.forest,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
               ),
               onPressed: () {
-                // Navigate to 08 Symptoms + Vitals as per Figma flow
                 Navigator.pushNamed(context, '/assessment/form');
               },
-              icon: const Icon(Icons.add_chart),
+              icon: const Icon(Icons.add_chart_rounded),
               label: const Text(
-                'Start New Health Checkup',
+                'Start Clinical Assessment & Vitals',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),

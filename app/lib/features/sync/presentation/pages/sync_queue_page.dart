@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
+import '../../../../core/theme/app_colors.dart';
 
 class SyncQueuePage extends StatefulWidget {
   const SyncQueuePage({super.key});
@@ -13,33 +14,29 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
   bool _isSyncing = false;
 
   void _triggerSync() async {
+    setState(() => _isSyncing = true);
     final appState = Provider.of<AppState>(context, listen: false);
 
+    // If currently marked offline, auto-switch to online for this sync
     if (!appState.isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('⚠️ Offline: Cannot upload without internet. Please enable Mobile Data or Wi-Fi.'),
-          backgroundColor: Colors.amber.shade900,
-        ),
-      );
-      return;
+      appState.toggleOnlineStatus();
     }
 
-    setState(() => _isSyncing = true);
-    final syncSuccess = await appState.syncAllQueueItems();
+    final success = await appState.syncAllQueueItems();
 
     if (!mounted) return;
     setState(() => _isSyncing = false);
 
-    if (syncSuccess) {
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Upload Complete! All offline records are now synchronized.'),
-          backgroundColor: Colors.green,
+          content: Text('✅ Sync & Upload Successful! All local patient records uploaded to server.'),
+          backgroundColor: AppColors.forest,
+          duration: Duration(seconds: 3),
         ),
       );
 
-      // If an assessment was recently created, proceed to AI Triage + Reasoning
+      // If an assessment was recently created, proceed directly to AI Triage
       if (appState.currentAssessment != null) {
         await Future.delayed(const Duration(milliseconds: 500));
         if (!mounted) return;
@@ -48,8 +45,9 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('❌ Upload Failed: Unable to reach backend server. Records remain safely saved on device.'),
+          content: Text(appState.errorMessage ?? 'Sync encountered an issue. Check connection and try again.'),
           backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -61,11 +59,12 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
     final items = appState.syncQueue;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Offline Upload Queue'),
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
+        title: const Text('Offline Sync Queue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.forest,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -89,11 +88,11 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        appState.isOnline ? 'Network Connected (Ready to Sync)' : 'Offline (Saved on device)',
+                        appState.isOnline ? 'Network Connected (Ready to Sync)' : 'Offline (Local Cache Active)',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '${items.length} records waiting to upload',
+                        '${items.length} Pending Mutations in SQLite Queue',
                         style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                       ),
                     ],
@@ -126,17 +125,17 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                         if (appState.currentAssessment != null)
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2563EB),
+                              backgroundColor: AppColors.forest,
                               foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              elevation: 0,
                             ),
                             onPressed: () {
                               Navigator.pushReplacementNamed(context, '/triage/ai_result');
                             },
                             icon: const Icon(Icons.auto_awesome),
-                            label: const FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text('View Health Urgency & Guidance', maxLines: 1),
-                            ),
+                            label: const Text('Proceed to AI Clinical Triage'),
                           ),
                       ],
                     ),
@@ -152,7 +151,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                         color: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(color: Colors.grey.shade200),
+                          side: const BorderSide(color: Color(0xFFE5E7EB)),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(14.0),
@@ -161,14 +160,14 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
+                                  color: AppColors.mintLight,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
                                   item.entityType == 'PATIENT'
                                       ? Icons.person_add
                                       : (item.entityType == 'ASSESSMENT' ? Icons.healing : Icons.assignment),
-                                  color: const Color(0xFF2563EB),
+                                  color: AppColors.forest,
                                   size: 20,
                                 ),
                               ),
@@ -193,8 +192,8 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: item.status == 'SYNCING'
-                                      ? Colors.blue.shade50
-                                      : Colors.amber.shade50,
+                                      ? const Color(0xFFEFF6FF)
+                                      : const Color(0xFFFEF3C7),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
@@ -202,7 +201,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: item.status == 'SYNCING' ? Colors.blue : Colors.amber.shade900,
+                                    color: item.status == 'SYNCING' ? const Color(0xFF1D4ED8) : const Color(0xFF92400E),
                                   ),
                                 ),
                               ),
@@ -227,33 +226,18 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
-                    child: const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'Dashboard',
-                        maxLines: 1,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
+                SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: AppColors.forest,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
                     ),
                     onPressed: (items.isEmpty || _isSyncing) ? null : _triggerSync,
                     icon: _isSyncing
@@ -262,14 +246,28 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                             height: 18,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : const Icon(Icons.cloud_upload),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _isSyncing ? 'Syncing...' : 'Upload All Now',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                      ),
+                        : const Icon(Icons.cloud_upload_rounded),
+                    label: Text(
+                      _isSyncing ? 'Syncing...' : 'Sync / Upload Queue Now',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF4B5563),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      side: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
+                    icon: const Icon(Icons.home_outlined, size: 18),
+                    label: const Text(
+                      'Back to Home Dashboard',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                   ),
                 ),
