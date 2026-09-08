@@ -19,38 +19,46 @@ async function main() {
 
   // ─── 0. CLEAR EXISTING TEST DATA SAFELY ────────────────────────────────────
   console.log('🧹 Clearing existing dummy and transactional data...');
-  await prisma.syncOperation.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.notification.deleteMany();
-  await prisma.aIRecommendation.deleteMany();
-  await prisma.symptom.deleteMany();
-  await prisma.vital.deleteMany();
-  await prisma.clinicalObservation.deleteMany();
-  await prisma.prescription.deleteMany();
-  await prisma.diagnosticResult.deleteMany();
-  await prisma.diagnosticOrder.deleteMany();
-  await prisma.assessment.deleteMany();
-  await prisma.queueEntry.deleteMany();
-  await prisma.appointment.deleteMany();
-  await prisma.counterReferral.deleteMany();
-  await prisma.referralEvent.deleteMany();
-  await prisma.referral.deleteMany();
-  await prisma.followUp.deleteMany();
-  await prisma.task.deleteMany();
-  await prisma.encounter.deleteMany();
-  await prisma.patientIdentifier.deleteMany();
-  await prisma.consent.deleteMany();
-  await prisma.condition.deleteMany();
-  await prisma.patient.deleteMany();
-  await prisma.facilityService.deleteMany();
-  await prisma.facilityCapacity.deleteMany();
-  await prisma.facilityAvailability.deleteMany();
-  await prisma.facilityDoctor.deleteMany();
-  await prisma.worker.deleteMany();
-  await prisma.specialist.deleteMany();
-  await prisma.doctor.deleteMany();
-  await prisma.facility.deleteMany();
-  await prisma.user.deleteMany();
+  const safeDelete = async (name: string, fn: () => Promise<any>) => {
+    try {
+      await fn();
+    } catch (e: any) {
+      console.warn(`⚠️ Safe cleanup warning on ${name}:`, e?.message || e);
+    }
+  };
+
+  await safeDelete('syncOperation', () => prisma.syncOperation.deleteMany());
+  await safeDelete('auditLog', () => prisma.auditLog.deleteMany());
+  await safeDelete('notification', () => prisma.notification.deleteMany());
+  await safeDelete('aIRecommendation', () => prisma.aIRecommendation.deleteMany());
+  await safeDelete('symptom', () => prisma.symptom.deleteMany());
+  await safeDelete('vital', () => prisma.vital.deleteMany());
+  await safeDelete('clinicalObservation', () => prisma.clinicalObservation.deleteMany());
+  await safeDelete('prescription', () => prisma.prescription.deleteMany());
+  await safeDelete('diagnosticResult', () => prisma.diagnosticResult.deleteMany());
+  await safeDelete('diagnosticOrder', () => prisma.diagnosticOrder.deleteMany());
+  await safeDelete('assessment', () => prisma.assessment.deleteMany());
+  await safeDelete('queueEntry', () => prisma.queueEntry.deleteMany());
+  await safeDelete('appointment', () => prisma.appointment.deleteMany());
+  await safeDelete('counterReferral', () => prisma.counterReferral.deleteMany());
+  await safeDelete('referralEvent', () => prisma.referralEvent.deleteMany());
+  await safeDelete('referral', () => prisma.referral.deleteMany());
+  await safeDelete('followUp', () => prisma.followUp.deleteMany());
+  await safeDelete('task', () => prisma.task.deleteMany());
+  await safeDelete('encounter', () => prisma.encounter.deleteMany());
+  await safeDelete('patientIdentifier', () => prisma.patientIdentifier.deleteMany());
+  await safeDelete('consent', () => prisma.consent.deleteMany());
+  await safeDelete('condition', () => prisma.condition.deleteMany());
+  await safeDelete('patient', () => prisma.patient.deleteMany());
+  await safeDelete('facilityService', () => prisma.facilityService.deleteMany());
+  await safeDelete('facilityCapacity', () => prisma.facilityCapacity.deleteMany());
+  await safeDelete('facilityAvailability', () => prisma.facilityAvailability.deleteMany());
+  await safeDelete('facilityDoctor', () => prisma.facilityDoctor.deleteMany());
+  await safeDelete('worker', () => prisma.worker.deleteMany());
+  await safeDelete('specialist', () => prisma.specialist.deleteMany());
+  await safeDelete('doctor', () => prisma.doctor.deleteMany());
+  await safeDelete('facility', () => prisma.facility.deleteMany());
+  await safeDelete('user', () => prisma.user.deleteMany());
 
   const passwordHash = await bcrypt.hash('password123', 10);
 
@@ -1104,7 +1112,11 @@ async function main() {
   ];
 
   for (const fu of followUps) {
-    await prisma.followUp.create({ data: fu });
+    try {
+      await prisma.followUp.create({ data: fu });
+    } catch (e: any) {
+      console.warn(`⚠️ Warning creating followUp (${fu.reason}):`, e?.message || e);
+    }
   }
 
   // ASHA Care Gap Tasks
@@ -1133,7 +1145,11 @@ async function main() {
   ];
 
   for (const t of tasks) {
-    await prisma.task.create({ data: t });
+    try {
+      await prisma.task.create({ data: t });
+    } catch (e: any) {
+      console.warn(`⚠️ Warning creating task (${t.type}):`, e?.message || e);
+    }
   }
 
   // ─── 9. REAL-TIME SYSTEM NOTIFICATIONS ────────────────────────────────────
