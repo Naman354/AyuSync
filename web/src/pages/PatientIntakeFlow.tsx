@@ -505,6 +505,79 @@ export default function PatientIntakeFlow() {
             </div>
           </div>
 
+          {/* Demo Dummy Information Filler Presets (For Judge & Testing Demonstrations) */}
+          <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
+                <Sparkles size={12} className="text-amber-700" />
+                Demo Quick-Fill Presets (1-Click Test Population):
+              </span>
+              <span className="text-[10px] text-amber-700 font-medium">Click to populate realistic profiles</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setPatient({
+                    name: 'Pooja Sharma',
+                    age: '26',
+                    gender: 'FEMALE',
+                    phone: '9823145678',
+                    address: 'Khandala Ward 2',
+                    abhaId: '91-8844-3321-0002'
+                  });
+                  setVitals({ bpSystolic: '154', bpDiastolic: '98', heartRate: '88', spO2: '97', temperature: '99.1' });
+                  setSymptoms(['High Blood Pressure', 'Severe Headache', 'Dizziness']);
+                  setReferralNotes('Second trimester gestational hypertension with persistent headache and elevated blood pressure.');
+                  setStepErrors({});
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                👩‍🍼 Maternal Care: Pooja Sharma (26F)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPatient({
+                    name: 'Aarav Patel',
+                    age: '3',
+                    gender: 'MALE',
+                    phone: '9823145679',
+                    address: 'Khandala East',
+                    abhaId: '91-8844-3321-0003'
+                  });
+                  setVitals({ bpSystolic: '102', bpDiastolic: '66', heartRate: '118', spO2: '95', temperature: '102.4' });
+                  setSymptoms(['High Fever', 'Dry Cough', 'Vomiting']);
+                  setReferralNotes('High-grade fever for 3 days unresponsive to paracetamol; lethargic and reduced oral intake.');
+                  setStepErrors({});
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                🧒 Pediatric Fever: Aarav Patel (3M)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPatient({
+                    name: 'Ramesh Kulkarni',
+                    age: '58',
+                    gender: 'MALE',
+                    phone: '9111222333',
+                    address: 'Khandala Sub-center',
+                    abhaId: '91-8844-3321-0001'
+                  });
+                  setVitals({ bpSystolic: '148', bpDiastolic: '92', heartRate: '82', spO2: '98', temperature: '98.6' });
+                  setSymptoms(['High Blood Pressure', 'Weakness / Fatigue', 'Blurred Vision']);
+                  setReferralNotes('Uncontrolled Type 2 Diabetes with Grade 1 Essential Hypertension; intermittent blurred vision.');
+                  setStepErrors({});
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                👴 Elderly Diabetic: Ramesh Kulkarni (58M)
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div>
               <label className={LABEL}>Full name *</label>
@@ -588,6 +661,64 @@ export default function PatientIntakeFlow() {
             <div>
               <h2 className="text-base font-bold text-gray-900">Health measurements</h2>
               <p className="text-xs text-gray-500">Record what you observed or measured</p>
+            </div>
+          </div>
+
+          {/* Demo Dummy Vitals Filler Presets */}
+          <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
+                <Sparkles size={12} className="text-amber-700" />
+                Demo Vitals Quick-Fill (1-Click Measurements):
+              </span>
+              <span className="text-[10px] text-amber-700 font-medium">Populate realistic clinical measurements</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setVitals({
+                    bpSystolic: '154',
+                    bpDiastolic: '98',
+                    heartRate: '88',
+                    spO2: '97',
+                    temperature: '99.1'
+                  });
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                ⚠️ High Risk Gestational BP (154/98)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVitals({
+                    bpSystolic: '102',
+                    bpDiastolic: '66',
+                    heartRate: '118',
+                    spO2: '95',
+                    temperature: '102.4'
+                  });
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                🌡️ Pediatric Acute Fever (102.4°F, 118 bpm)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVitals({
+                    bpSystolic: '120',
+                    bpDiastolic: '80',
+                    heartRate: '76',
+                    spO2: '98',
+                    temperature: '98.6'
+                  });
+                }}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                ✓ Normal / Routine Baseline (120/80)
+              </button>
             </div>
           </div>
 

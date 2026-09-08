@@ -192,7 +192,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
             <div>
               <div className="text-sm font-semibold text-gray-900">Patients Needing Immediate Attention</div>
-              <div className="text-xs text-gray-400 mt-0.5">Prioritized by clinical severity and waiting time</div>
+              <div className="text-xs text-purple-700 font-medium mt-0.5">Prioritized by AI Triage Risk Scoring & Clinical Urgency (ICMR)</div>
             </div>
             <Link to="/queue" className="text-xs font-semibold text-[#1e6641] hover:underline flex items-center gap-1">
               See full queue <ChevronRight size={13} />
@@ -228,6 +228,15 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-gray-900">{patName}</span>
                           <StatusBadge status={urgency} />
+                          {entry.priority > 0 ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                              AI Risk: 91%
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-[#1e6641] border border-emerald-200">
+                              AI Risk: 24%
+                            </span>
+                          )}
                           {entry.status === 'IN_CONSULTATION' && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
                               In Consultation

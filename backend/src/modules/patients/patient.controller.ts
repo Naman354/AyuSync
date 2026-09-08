@@ -125,7 +125,7 @@ export const getPatientTimeline = async (req: Request, res: Response) => {
           orderBy: { start: 'desc' }
         },
         referrals: {
-          include: { origin: true, destination: true }
+          include: { origin: true, destination: true, counterReferral: true, events: { orderBy: { createdAt: 'desc' } } }
         },
         conditions: { orderBy: { diagnosedAt: 'desc' } },
         followUps: {

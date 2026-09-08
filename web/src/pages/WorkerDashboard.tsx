@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useNetworkStatus } from '../lib/network';
 import { getOfflineQueue, getLocalPatients, flushOfflineSync } from '../lib/offlineSync';
+import { getCompletedTaskIds, markTaskAsCompletedGlobally } from './PatientDashboard';
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
 function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: string) => void; isNew?: boolean }) {
@@ -25,6 +26,7 @@ function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: str
     setCompleting(true);
     // 1. Briefly animate the task text being crossed out
     setIsCrossedOut(true);
+    markTaskAsCompletedGlobally(task.id);
     api.patch(`/followups/${task.id}/complete`, {}).catch(() => {});
 
     // 2. Remove the task card from the visible list after 350ms
@@ -110,7 +112,7 @@ export default function WorkerDashboard() {
 
   const { isOnline, isOffline }       = useNetworkStatus();
   const [patients, setPatients]       = useState<any[]>(DEMO_WORKER_PATIENTS);
-  const [followUps, setFollowUps]     = useState<any[]>(DEMO_WORKER_TASKS);
+  const [followUps, setFollowUps]     = useState<any[]>(() => DEMO_WORKER_TASKS.filter(t => !getCompletedTaskIds().has(t.id)));
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
   const [syncing, setSyncing]         = useState(false);
@@ -156,14 +158,33 @@ export default function WorkerDashboard() {
       }
     } catch {}
 
+    const completed = getCompletedTaskIds();
+    const activeTasks = taskList.filter(t => !completed.has(t.id) && t.status !== 'COMPLETED');
+
     setPatients(mergedPatients.slice(0, 6));
-    setFollowUps(taskList);
+    setFollowUps(activeTasks);
     setOfflineQueue(getOfflineQueue());
     setLoading(false);
   };
 
   useEffect(() => {
     refreshData();
+
+    // Listen for tasks completed on the Patient screen
+    const onRemoteTaskCompleted = (e: any) => {
+      const id = e.detail?.id;
+      if (id) {
+        setFollowUps(prev => prev.filter(t => t.id !== id));
+      }
+    };
+    window.addEventListener('ayusync:task_completed', onRemoteTaskCompleted);
+    window.addEventListener('storage', () => {
+      const completed = getCompletedTaskIds();
+      setFollowUps(prev => prev.filter(t => !completed.has(t.id)));
+    });
+    return () => {
+      window.removeEventListener('ayusync:task_completed', onRemoteTaskCompleted);
+    };
   }, []);
 
   // ── Listen for local patient intakes & offline queue updates in real-time ──

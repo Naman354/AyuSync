@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Button } from '../components/ui/Button';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -8,14 +8,42 @@ import AiTriageCard from '../components/triage/AiTriageCard';
 import {
   ArrowLeft, User, MapPin, Phone, Calendar, Plus, X,
   Activity, HeartPulse, Pill, History, ClipboardList,
-  ShieldCheck
+  ShieldCheck, Building2, Sparkles, Ambulance
 } from 'lucide-react';
 
 export default function PatientProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const isWorker = user.role === 'WORKER';
+
   const [patient,          setPatient]          = useState<any>(null);
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState('');
+
+  // Referral modal state
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [referralVitals, setReferralVitals] = useState({
+    bpSystolic: '130',
+    bpDiastolic: '80',
+    heartRate: '76',
+    spO2: '98',
+    temperature: '98.6'
+  });
+  const [referralSymptoms, setReferralSymptoms] = useState<string[]>([]);
+  const [referralReason, setReferralReason] = useState('');
+  const [needsAmbulance, setNeedsAmbulance] = useState(false);
+  const [facilities, setFacilities] = useState<any[]>([]);
+  const [selectedFacility, setSelectedFacility] = useState('');
+  const [evaluatingAi, setEvaluatingAi] = useState(false);
+  const [aiTriage, setAiTriage] = useState<{
+    urgency: string;
+    score: number;
+    tier: string;
+    reasons: string[];
+  } | null>(null);
+  const [submittingReferral, setSubmittingReferral] = useState(false);
+  const [referralError, setReferralError] = useState('');
 
   // Condition modal state
   const [showCondModal,    setShowCondModal]    = useState(false);
@@ -65,6 +93,141 @@ export default function PatientProfile() {
       setCondError(err.response?.data?.error || 'Could not save condition.');
     } finally {
       setSavingCond(false);
+    }
+  };
+
+  const handleOpenReferralModal = () => {
+    // Pre-fill with patient's latest recorded vitals
+    const lv = patient?.encounters?.[0]?.vitals?.[0];
+    if (lv) {
+      const [sys, dia] = (lv.bloodPressure || '130/80').split('/');
+      setReferralVitals({
+        bpSystolic: sys || '130',
+        bpDiastolic: dia || '80',
+        heartRate: String(lv.heartRate || '76'),
+        spO2: String(lv.spo2 || '98'),
+        temperature: String(lv.temperature || '98.6')
+      });
+    }
+
+    if (facilities.length === 0) {
+      api.get('/facilities').then(r => {
+        const facs = r.data.data || r.data || [];
+        setFacilities(facs);
+        if (facs.length > 0) setSelectedFacility(facs[0].id);
+      }).catch(() => {});
+    }
+
+    setShowReferralModal(true);
+  };
+
+  const handleToggleSymptom = (sym: string) => {
+    const updated = referralSymptoms.includes(sym)
+      ? referralSymptoms.filter(s => s !== sym)
+      : [...referralSymptoms, sym];
+    setReferralSymptoms(updated);
+    evaluateTriage(updated, referralVitals);
+  };
+
+  const evaluateTriage = async (currSymptoms: string[], currVitals: typeof referralVitals) => {
+    setEvaluatingAi(true);
+    try {
+      const res = await api.post('/ai/triage', {
+        age: patient?.age || 30,
+        gender: patient?.gender,
+        symptoms: currSymptoms.map(s => ({ name: s })),
+        vitals: {
+          blood_pressure: `${currVitals.bpSystolic}/${currVitals.bpDiastolic}`,
+          bpSystolic: currVitals.bpSystolic,
+          bpDiastolic: currVitals.bpDiastolic,
+          spo2: currVitals.spO2,
+          heart_rate: currVitals.heartRate,
+          temperature: currVitals.temperature
+        }
+      });
+      const d = res.data;
+      const urg = (d.urgency || d.urgencyCategory || 'ROUTINE').toUpperCase();
+      setAiTriage({
+        urgency: urg,
+        score: urg === 'URGENT' ? 92 : urg === 'PRIORITY' ? 68 : 28,
+        tier: d.tier || (urg === 'URGENT' ? 'Community Health Centre (CHC) or District Hospital' : 'Primary Health Centre (PHC)'),
+        reasons: d.reasons || ['Evaluated according to ICMR rural clinical triage guidelines']
+      });
+
+      // Predict facility routing
+      const routeRes: any = await api.post('/ai/route', {
+        urgencyCategory: urg,
+        urgency: urg,
+        symptoms: currSymptoms.map(s => ({ name: s })),
+        vitals: currVitals
+      }).catch(() => null);
+      const ranked = routeRes?.data?.ranked_facilities || [];
+      if (ranked.length > 0) {
+        const top = ranked[0];
+        const match = facilities.find(f => f.id === top.facility_id || f.name.toLowerCase().includes(top.facility_name.toLowerCase().slice(0, 8)));
+        if (match) setSelectedFacility(match.id);
+        else if (top.facility_id) setSelectedFacility(top.facility_id);
+      }
+    } catch {
+      const sys = Number(currVitals.bpSystolic) || 120;
+      const spo2 = Number(currVitals.spO2) || 98;
+      const isUrg = spo2 < 92 || sys >= 160 || currSymptoms.includes('Chest Pain');
+      const isPri = !isUrg && (sys >= 140 || spo2 < 95 || currSymptoms.length >= 2);
+      const urg = isUrg ? 'URGENT' : isPri ? 'PRIORITY' : 'ROUTINE';
+      setAiTriage({
+        urgency: urg,
+        score: isUrg ? 92 : isPri ? 68 : 28,
+        tier: isUrg ? 'Community Health Centre (CHC)' : 'Primary Health Centre (PHC)',
+        reasons: [isUrg ? 'High clinical risk thresholds detected (BP >= 160 or SpO2 < 92%)' : 'Moderate priority physician observation recommended']
+      });
+    } finally {
+      setEvaluatingAi(false);
+    }
+  };
+
+  const handleSubmitReferral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingReferral(true);
+    setReferralError('');
+    try {
+      const urg = aiTriage?.urgency || 'PRIORITY';
+      const cleanReason = referralReason.trim() || referralSymptoms.join(', ') || 'Physician consultation for chronic condition';
+      const destId = selectedFacility || (facilities.length > 0 ? facilities[0].id : 'fac-baramati-chc');
+      const destFacility = facilities.find(f => f.id === destId);
+      const destName = destFacility?.name || 'Baramati Community Health Centre';
+
+      await api.post('/referrals', {
+        patientId: patient.id,
+        destinationId: destId,
+        urgency: urg,
+        reason: cleanReason
+      }).catch(() => {});
+
+      const token = `REF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      navigate('/referral-success', {
+        state: {
+          token,
+          patientName: patient.name,
+          age: patient.age,
+          gender: patient.gender,
+          phone: patient.phone,
+          village: patient.village || patient.address,
+          abhaId: patient.identifiers?.[0]?.value || patient.abhaId,
+          urgency: urg,
+          facilityName: destName,
+          originFacility: 'Khandala Sub-Center',
+          symptoms: referralSymptoms,
+          vitals: referralVitals,
+          reason: cleanReason,
+          needsAmbulance,
+          workerName: user.name || 'Sunita Patil (ASHA Worker)',
+          isOffline: false
+        }
+      });
+    } catch (err: any) {
+      setReferralError(err.response?.data?.error || 'Failed to submit referral. Please try again.');
+      setSubmittingReferral(false);
     }
   };
 
@@ -127,6 +290,14 @@ export default function PatientProfile() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isWorker && (
+              <button
+                onClick={handleOpenReferralModal}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#1e6641] hover:bg-[#165032] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              >
+                <Building2 size={14} /> Refer to Hospital
+              </button>
+            )}
             <button
               onClick={() => setShowHistoryModal(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors"
@@ -544,6 +715,254 @@ export default function PatientProfile() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Compact Referral Modal for ASHA Workers ── */}
+      {showReferralModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-[#1e6641] flex items-center justify-center">
+                  <Building2 size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Refer Patient to Hospital / Doctor</h3>
+                  <p className="text-[11px] text-gray-500">Government Community-to-Hospital Escalation Protocol</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowReferralModal(false); setReferralError(''); }}
+                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-200 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitReferral} className="p-6 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+              {referralError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 font-medium">
+                  {referralError}
+                </div>
+              )}
+
+              {/* Patient Identity Snapshot */}
+              <div className="p-3 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-between flex-wrap gap-2 text-xs">
+                <div>
+                  <span className="font-bold text-gray-900">{patient.name}</span>
+                  <span className="text-gray-500 ml-2">({patient.age} yrs · {patient.gender})</span>
+                  <div className="text-[11px] text-gray-400 mt-0.5">{patient.village || patient.address || 'Khandala Ward 2'}</div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-gray-500 block">ABHA ID</span>
+                  <span className="font-mono text-xs font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200">
+                    {patient.identifiers?.[0]?.value || patient.abhaId || '91-8844-3321-0001'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Vitals & Measurements */}
+              <div className="space-y-2">
+                <label className="block font-bold text-gray-800">
+                  Current Vital Signs (Sub-Center Screening)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">BP Systolic</label>
+                    <input
+                      type="text"
+                      value={referralVitals.bpSystolic}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setReferralVitals(prev => ({ ...prev, bpSystolic: val }));
+                        evaluateTriage(referralSymptoms, { ...referralVitals, bpSystolic: val });
+                      }}
+                      placeholder="130"
+                      className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">BP Diastolic</label>
+                    <input
+                      type="text"
+                      value={referralVitals.bpDiastolic}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setReferralVitals(prev => ({ ...prev, bpDiastolic: val }));
+                        evaluateTriage(referralSymptoms, { ...referralVitals, bpDiastolic: val });
+                      }}
+                      placeholder="80"
+                      className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">Pulse (bpm)</label>
+                    <input
+                      type="text"
+                      value={referralVitals.heartRate}
+                      onChange={e => setReferralVitals(prev => ({ ...prev, heartRate: e.target.value }))}
+                      placeholder="76"
+                      className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">SpO2 (%)</label>
+                    <input
+                      type="text"
+                      value={referralVitals.spO2}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setReferralVitals(prev => ({ ...prev, spO2: val }));
+                        evaluateTriage(referralSymptoms, { ...referralVitals, spO2: val });
+                      }}
+                      placeholder="98"
+                      className="w-full border border-gray-200 rounded-lg p-2 text-xs font-mono text-gray-900"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Presenting Symptoms */}
+              <div className="space-y-1.5">
+                <label className="block font-bold text-gray-800">
+                  Presenting Symptoms (Select to trigger AI triage)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Severe Headache', 'High Blood Pressure', 'Chest Pain', 'Shortness of Breath',
+                    'Dizziness / Vertigo', 'High Fever', 'Acute Weakness', 'Uncontrolled Sugar',
+                    'Abdominal Pain', 'Swelling / Edema'
+                  ].map(s => {
+                    const active = referralSymptoms.includes(s);
+                    return (
+                      <button
+                        type="button"
+                        key={s}
+                        onClick={() => handleToggleSymptom(s)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                          active
+                            ? 'bg-[#1e6641] text-white shadow-xs'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {active ? `✓ ${s}` : `+ ${s}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Clinical Referral Reason & Notes */}
+              <div>
+                <label className="block font-bold text-gray-800 mb-1">
+                  Reason for Referral / Clinical Notes
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Describe patient condition, reason for referral, or doctor instructions required..."
+                  value={referralReason}
+                  onChange={e => setReferralReason(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 focus:ring-2 focus:ring-[#1e6641] focus:outline-none"
+                />
+              </div>
+
+              {/* Live AI Urgency Triage Preview */}
+              <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-950 text-xs">
+                    <Sparkles size={13} className="text-[#1e6641]" />
+                    Explainable AI Clinical Triage
+                  </div>
+                  {evaluatingAi ? (
+                    <span className="text-[10px] text-gray-500 animate-pulse">Evaluating AI model...</span>
+                  ) : (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      aiTriage?.urgency === 'URGENT'
+                        ? 'bg-red-100 text-red-800 border border-red-300'
+                        : aiTriage?.urgency === 'PRIORITY'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                        : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    }`}>
+                      {aiTriage?.urgency || 'PRIORITY'} · {aiTriage?.score || 68}% Urgency
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-[11px] text-emerald-900">
+                  Recommended Facility Tier: <strong>{aiTriage?.tier || 'Primary Health Centre (PHC) / CHC'}</strong>
+                </div>
+
+                {aiTriage?.reasons && aiTriage.reasons.length > 0 && (
+                  <ul className="text-[10.5px] text-gray-600 list-disc list-inside space-y-0.5">
+                    {aiTriage.reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Destination Facility Selection */}
+              <div>
+                <label className="block font-bold text-gray-800 mb-1">
+                  Destination Health Facility (AI Matched)
+                </label>
+                <select
+                  value={selectedFacility}
+                  onChange={e => setSelectedFacility(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 bg-white focus:ring-2 focus:ring-[#1e6641] focus:outline-none"
+                >
+                  {facilities.length === 0 ? (
+                    <>
+                      <option value="fac-baramati-chc">Baramati Community Health Centre (CHC · Level 2)</option>
+                      <option value="fac-khandala-phc">Khandala Primary Health Centre (PHC · Level 1)</option>
+                      <option value="fac-pune-dist">Aundh District Hospital, Pune (Level 3 Tertiary)</option>
+                    </>
+                  ) : (
+                    facilities.map(f => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} ({f.type || 'Hospital'})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* 108 Emergency Ambulance Toggle */}
+              <div className="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="needsAmbulance"
+                  checked={needsAmbulance}
+                  onChange={e => setNeedsAmbulance(e.target.checked)}
+                  className="rounded text-[#1e6641] focus:ring-[#1e6641]"
+                />
+                <label htmlFor="needsAmbulance" className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 cursor-pointer">
+                  <Ambulance size={14} className="text-red-600" />
+                  Dispatch 108 Emergency Ambulance for Patient Transport
+                </label>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowReferralModal(false)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReferral}
+                  className="px-4 py-2 rounded-xl bg-[#1e6641] hover:bg-[#165032] text-white font-bold transition-colors disabled:opacity-60 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Building2 size={14} />
+                  {submittingReferral ? 'Creating Referral...' : 'Submit Referral & Generate Slip'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

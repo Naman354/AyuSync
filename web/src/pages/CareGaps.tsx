@@ -7,6 +7,7 @@ import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import InlineError from '../components/ui/InlineError';
 import api from '../lib/api';
+import { getCompletedTaskIds, markTaskAsCompletedGlobally } from './PatientDashboard';
 
 interface Task {
   id: string;
@@ -123,7 +124,7 @@ const DEMO_TASKS: Task[] = [
 type FilterType = 'ALL' | 'OVERDUE' | 'TODAY';
 
 export default function CareGaps() {
-  const [tasks, setTasks] = useState<Task[]>(DEMO_TASKS);
+  const [tasks, setTasks] = useState<Task[]>(() => DEMO_TASKS.filter(t => !getCompletedTaskIds().has(t.id)));
   const [filter, setFilter] = useState<FilterType>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState('');
@@ -140,14 +141,33 @@ export default function CareGaps() {
   const [activeTaskForCompletion, setActiveTaskForCompletion] = useState<Task | null>(null);
   const [completionNote, setCompletionNote] = useState('');
 
+  // Listen for real-time task completion from Patient Dashboard
+  useEffect(() => {
+    const handleRemoteTaskCompleted = (e: any) => {
+      const finishedId = e.detail?.id;
+      if (finishedId) {
+        setTasks(prev => prev.filter(t => t.id !== finishedId));
+      }
+    };
+    window.addEventListener('ayusync:task_completed', handleRemoteTaskCompleted);
+    window.addEventListener('storage', () => {
+      const completed = getCompletedTaskIds();
+      setTasks(prev => prev.filter(t => !completed.has(t.id)));
+    });
+    return () => {
+      window.removeEventListener('ayusync:task_completed', handleRemoteTaskCompleted);
+    };
+  }, []);
+
   // Fetch live follow-ups from API with resilient fallback
   useEffect(() => {
     api.get('/followups')
       .then(res => {
         const live: any[] = Array.isArray(res.data) ? res.data : [];
         if (live.length > 0) {
+          const completedSet = getCompletedTaskIds();
           // Completed tasks should not remain visible on screen
-          const activeOnly = live.filter(f => f.status !== 'COMPLETED');
+          const activeOnly = live.filter(f => f.status !== 'COMPLETED' && !completedSet.has(f.id));
 
           // Sync escalated items into persistent set from server data
           const serverEscalations = new Set<string>();
@@ -201,7 +221,9 @@ export default function CareGaps() {
         }
       })
       .catch(() => {
-        // Keep demo tasks for reliable offline / prototype review
+        // Keep demo tasks for reliable offline / prototype review, excluding any completed
+        const completedSet = getCompletedTaskIds();
+        setTasks(DEMO_TASKS.filter(t => !completedSet.has(t.id)));
       });
   }, []);
 
@@ -222,10 +244,13 @@ export default function CareGaps() {
     setActiveTaskForCompletion(null);
     setAnimatingTaskIds(prev => new Set(prev).add(taskId));
 
-    // 2. Dispatch completion to backend
+    // 2. Dispatch completion to shared storage & event bus
+    markTaskAsCompletedGlobally(taskId);
+
+    // 3. Dispatch completion to backend
     api.patch(`/followups/${taskId}/complete`, { completionNotes: notesToSave }).catch(() => {});
 
-    // 3. Briefly animate task text being crossed out (350ms), then remove task card from visible list
+    // 4. Briefly animate task text being crossed out (350ms), then remove task card from visible list
     setTimeout(() => {
       setTasks(prev => prev.filter(t => t.id !== taskId));
       setAnimatingTaskIds(prev => {
@@ -233,7 +258,7 @@ export default function CareGaps() {
         next.delete(taskId);
         return next;
       });
-      setFeedbackMsg(`Completed recovery visit for "${patientName}".`);
+      setFeedbackMsg(`Completed recovery visit for "${patientName}". Status synchronized.`);
       setTimeout(() => setFeedbackMsg(''), 3000);
     }, 350);
   };
