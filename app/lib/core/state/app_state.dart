@@ -11,6 +11,9 @@ import '../network/api_service.dart';
 import '../network/network_quality_service.dart';
 import '../network/local_db.dart';
 import '../sync/sync_engine.dart';
+import '../localization/app_language.dart';
+import '../localization/app_translations.dart';
+import '../localization/language_preferences.dart';
 
 class AppState extends ChangeNotifier {
   final _uuid = const Uuid();
@@ -86,10 +89,51 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Multilingual Localization State (English, Hindi, Marathi)
+  AppLanguage _currentLanguage = AppLanguage.english;
+  AppLanguage get currentLanguage => _currentLanguage;
+
+  Locale get currentLocale {
+    switch (_currentLanguage) {
+      case AppLanguage.hindi:
+        return const Locale('hi', 'IN');
+      case AppLanguage.marathi:
+        return const Locale('mr', 'IN');
+      case AppLanguage.english:
+      default:
+        return const Locale('en', 'US');
+    }
+  }
+
+  /// Translates a key according to the active language
+  String translate(String key, {Map<String, String>? args}) {
+    return AppTranslations.get(_currentLanguage, key, args: args);
+  }
+
+  bool _hasUserSetLanguage = false;
+
+  /// Changes the active language, immediately notifying listeners and persisting choice
+  Future<void> setLanguage(AppLanguage language) async {
+    _hasUserSetLanguage = true;
+    if (_currentLanguage == language) return;
+    _currentLanguage = language;
+    notifyListeners();
+    await LanguagePreferences.saveLanguage(language);
+  }
+
+  Future<void> _initLanguage() async {
+    final saved = await LanguagePreferences.getSavedLanguage();
+    if (!_hasUserSetLanguage && _currentLanguage != saved) {
+      _currentLanguage = saved;
+      notifyListeners();
+    }
+  }
+
   AppState() {
     _initDefaults();
     _loadFromLocalDb();
     _initNetworkMonitoring();
+    _initLanguage();
   }
 
   void _initDefaults() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/localization/app_language.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,7 +16,6 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController(text: 'password123');
   bool _obscurePassword = true;
   bool _isLoading = false;
-  String _selectedLanguage = 'English'; // 'English' or 'Hindi'
 
   @override
   void dispose() {
@@ -84,6 +84,8 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -120,11 +122,11 @@ class _LoginPageState extends State<LoginPage> {
                           }
                         },
                       ),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Namaste!',
+                          appState.translate('login_namaste'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                             color: AppColors.forest,
@@ -147,9 +149,9 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 12),
 
                         // "Welcome" Title
-                        const Text(
-                          'Welcome',
-                          style: TextStyle(
+                        Text(
+                          appState.translate('login_welcome'),
+                          style: const TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
                             color: AppColors.forest,
@@ -160,9 +162,9 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 28),
 
                         // ASHA Id Field
-                        const Text(
-                          'ASHA Id',
-                          style: TextStyle(
+                        Text(
+                          appState.translate('login_asha_id'),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textDark,
@@ -196,9 +198,9 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 20),
 
                         // Password Field
-                        const Text(
-                          'Password',
-                          style: TextStyle(
+                        Text(
+                          appState.translate('login_password'),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textDark,
@@ -225,7 +227,7 @@ class _LoginPageState extends State<LoginPage> {
                                       fontWeight: FontWeight.w500),
                                   decoration: const InputDecoration(
                                     border: InputBorder.none,
-                                    hintText: '************',
+                                    hintText: '••••••••',
                                     hintStyle: TextStyle(
                                         fontSize: 14, color: Color(0xFF94A3B8)),
                                     isDense: true,
@@ -241,31 +243,30 @@ class _LoginPageState extends State<LoginPage> {
                                   size: 20,
                                 ),
                                 onPressed: () {
-                                  setState(() =>
-                                      _obscurePassword = !_obscurePassword);
+                                  setState(() => _obscurePassword = !_obscurePassword);
                                 },
                               ),
                             ],
                           ),
                         ),
 
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 32),
 
                         // Log In Button
                         Center(
                           child: SizedBox(
-                            width: 220,
+                            width: 170,
                             height: 48,
                             child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleLogin,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.forest,
                                 foregroundColor: Colors.white,
+                                elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(24),
                                 ),
-                                elevation: 0,
                               ),
+                              onPressed: _isLoading ? null : _handleLogin,
                               child: _isLoading
                                   ? const SizedBox(
                                       width: 22,
@@ -274,9 +275,9 @@ class _LoginPageState extends State<LoginPage> {
                                           color: Colors.white,
                                           strokeWidth: 2.2),
                                     )
-                                  : const Text(
-                                      'Log In',
-                                      style: TextStyle(
+                                  : Text(
+                                      appState.translate('login_title'),
+                                      style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: 0.2,
@@ -289,10 +290,10 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 18),
 
                         // "or" Divider
-                        const Center(
+                        Center(
                           child: Text(
-                            'or',
-                            style: TextStyle(
+                            appState.translate('or_text'),
+                            style: const TextStyle(
                               fontSize: 13,
                               color: Color(0xFF94A3B8),
                               fontWeight: FontWeight.w500,
@@ -335,9 +336,9 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               );
                             },
-                            child: const Text(
-                              "Don't have an account? Sign up",
-                              style: TextStyle(
+                            child: Text(
+                              appState.translate('login_signup_prompt'),
+                              style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.forest,
@@ -352,67 +353,42 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
 
-                // Language Switcher Pill at the Bottom
+                // Language Switcher Pill at the Bottom (English, Hindi, Marathi)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 24.0),
                   child: Center(
                     child: Container(
-                      height: 36,
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(19),
                         border: Border.all(color: AppColors.forest, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.forest.withValues(alpha: 0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          GestureDetector(
-                            onTap: () =>
-                                setState(() => _selectedLanguage = 'English'),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 18, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: _selectedLanguage == 'English'
-                                    ? AppColors.forest
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                'English',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: _selectedLanguage == 'English'
-                                      ? Colors.white
-                                      : AppColors.forest,
-                                ),
-                              ),
-                            ),
+                          _buildLanguageOption(
+                            appState,
+                            AppLanguage.english,
+                            'English',
                           ),
-                          GestureDetector(
-                            onTap: () =>
-                                setState(() => _selectedLanguage = 'Hindi'),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 18, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: _selectedLanguage == 'Hindi'
-                                    ? AppColors.forest
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                'Hindi',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: _selectedLanguage == 'Hindi'
-                                      ? Colors.white
-                                      : AppColors.forest,
-                                ),
-                              ),
-                            ),
+                          _buildLanguageOption(
+                            appState,
+                            AppLanguage.hindi,
+                            'हिंदी',
+                          ),
+                          _buildLanguageOption(
+                            appState,
+                            AppLanguage.marathi,
+                            'मराठी',
                           ),
                         ],
                       ),
@@ -422,6 +398,31 @@ class _LoginPageState extends State<LoginPage> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(AppState appState, AppLanguage language, String label) {
+    final isSelected = appState.currentLanguage == language;
+    return GestureDetector(
+      onTap: () async {
+        await appState.setLanguage(language);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.forest : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isSelected ? Colors.white : AppColors.forest,
+          ),
         ),
       ),
     );

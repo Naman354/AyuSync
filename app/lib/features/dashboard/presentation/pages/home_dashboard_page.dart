@@ -5,6 +5,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/followup_model.dart';
 import '../../../../core/models/patient_model.dart';
 import '../../../../core/network/network_quality_service.dart';
+import '../../../../core/localization/app_language.dart';
+import '../../../../core/localization/localization_extensions.dart';
 import '../../../followup/presentation/pages/followup_task_details_page.dart';
 
 class HomeDashboardPage extends StatefulWidget {
@@ -70,7 +72,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               const SizedBox(height: 16),
 
               // 5. High-Impact Primary Actions
-              _buildPrimaryActions(context),
+              _buildPrimaryActions(context, appState),
 
               const SizedBox(height: 20),
 
@@ -92,9 +94,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
         foregroundColor: Colors.white,
         elevation: 4,
         icon: const Icon(Icons.person_add_alt_1_rounded, size: 20),
-        label: const Text(
-          'New Patient',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.2),
+        label: Text(
+          appState.translate('action_register'),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.2),
         ),
         onPressed: () => Navigator.pushNamed(context, '/new-patient'),
       ),
@@ -196,6 +198,36 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                   ],
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Language Switcher Action
+          InkWell(
+            onTap: () => _showWorkerProfileDialog(context, appState),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.forest.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.language_rounded, color: AppColors.forest, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    appState.currentLanguage.code.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.forest,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 6),
@@ -508,9 +540,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
         // Registered Citizens
         Expanded(
           child: _buildMetricCard(
-            title: 'Registered',
+            title: appState.translate('metric_registered'),
             value: '$totalPatients',
-            caption: 'Citizens',
+            caption: appState.translate('metric_citizens'),
             icon: Icons.people_alt_rounded,
             color: const Color(0xFF0284C7),
             bgColor: const Color(0xFFE0F2FE),
@@ -521,9 +553,11 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
         // Today's Follow-up Visits
         Expanded(
           child: _buildMetricCard(
-            title: 'Active Visits',
+            title: appState.translate('metric_active_visits'),
             value: '$pendingCount',
-            caption: overdueCount > 0 ? '$overdueCount overdue' : 'Due for visit',
+            caption: overdueCount > 0
+                ? appState.translate('metric_overdue', args: {'count': '$overdueCount'})
+                : appState.translate('metric_due_visit'),
             icon: Icons.assignment_outlined,
             color: overdueCount > 0 ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
             bgColor: overdueCount > 0 ? const Color(0xFFFEE2E2) : const Color(0xFFDCFCE7),
@@ -534,9 +568,11 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
         // Sync Mutations Queue
         Expanded(
           child: _buildMetricCard(
-            title: 'Offline Sync',
+            title: appState.translate('metric_offline_sync'),
             value: '${appState.syncQueue.length}',
-            caption: appState.syncQueue.isEmpty ? 'All Synced' : 'Pending upload',
+            caption: appState.syncQueue.isEmpty
+                ? appState.translate('metric_all_synced')
+                : appState.translate('metric_pending_upload'),
             icon: Icons.cloud_done_outlined,
             color: appState.syncQueue.isEmpty ? const Color(0xFF16A34A) : const Color(0xFFD97706),
             bgColor: appState.syncQueue.isEmpty ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
@@ -624,13 +660,13 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   }
 
   // 5. Primary Quick Actions: Large, clear touch targets
-  Widget _buildPrimaryActions(BuildContext context) {
+  Widget _buildPrimaryActions(BuildContext context, AppState appState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Quick Field Actions',
-          style: TextStyle(
+        Text(
+          appState.translate('quick_actions_title'),
+          style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w800,
             color: Color(0xFF0F172A),
@@ -642,8 +678,8 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             // Register Patient
             Expanded(
               child: _buildActionTile(
-                title: 'Register Patient',
-                subtitle: 'New camp intake',
+                title: appState.translate('action_register'),
+                subtitle: appState.translate('action_register_sub'),
                 icon: Icons.person_add_alt_1_rounded,
                 isPrimary: true,
                 onTap: () => Navigator.pushNamed(context, '/new-patient'),
@@ -653,8 +689,8 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             // Clinical Triage
             Expanded(
               child: _buildActionTile(
-                title: 'Clinical Vitals',
-                subtitle: 'Assessment & Triage',
+                title: appState.translate('action_vitals'),
+                subtitle: appState.translate('action_vitals_sub'),
                 icon: Icons.monitor_heart_outlined,
                 iconColor: const Color(0xFF0284C7),
                 iconBg: const Color(0xFFE0F2FE),
@@ -669,8 +705,8 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             // Search Citizens
             Expanded(
               child: _buildActionTile(
-                title: 'Search Citizens',
-                subtitle: 'By ABHA or phone',
+                title: appState.translate('action_search'),
+                subtitle: appState.translate('action_search_sub'),
                 icon: Icons.person_search_rounded,
                 iconColor: const Color(0xFF6366F1),
                 iconBg: const Color(0xFFEEF2FF),
@@ -681,8 +717,8 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             // Follow-up Inbox
             Expanded(
               child: _buildActionTile(
-                title: 'Care Gaps Inbox',
-                subtitle: 'Doctor tasks loop',
+                title: appState.translate('action_care_gaps'),
+                subtitle: appState.translate('action_care_gaps_sub'),
                 icon: Icons.mark_chat_unread_outlined,
                 iconColor: const Color(0xFFD97706),
                 iconBg: const Color(0xFFFEF3C7),
@@ -824,10 +860,10 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                 child: const Icon(Icons.event_note_rounded, size: 18, color: AppColors.forest),
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Today\'s Field Visits & Tasks',
-                  style: TextStyle(
+                  appState.translate('today_visits_title'),
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
@@ -836,9 +872,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               ),
               InkWell(
                 onTap: () => Navigator.pushNamed(context, '/followup-inbox'),
-                child: const Text(
-                  'View All',
-                  style: TextStyle(
+                child: Text(
+                  appState.translate('view_all'),
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: AppColors.forest,
@@ -931,7 +967,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        isToday ? 'TODAY' : weekdayStr,
+                        isToday ? (appState.currentLanguage == AppLanguage.english ? 'TODAY' : appState.translate('filter_today')) : weekdayStr,
                         style: TextStyle(
                           fontSize: isToday ? 8 : 10,
                           fontWeight: FontWeight.w700,
@@ -954,13 +990,13 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _filterChip('TODAY', 'Pending (${allTasks.length - completedCount})'),
+                _filterChip('TODAY', '${appState.translate('filter_today')} (${allTasks.length - completedCount})'),
                 const SizedBox(width: 8),
-                _filterChip('OVERDUE', 'Overdue'),
+                _filterChip('OVERDUE', appState.translate('filter_overdue')),
                 const SizedBox(width: 8),
-                _filterChip('ALL', 'All (${allTasks.length})'),
+                _filterChip('ALL', '${appState.translate('filter_all')} (${allTasks.length})'),
                 const SizedBox(width: 8),
-                _filterChip('COMPLETED', 'Done ($completedCount)'),
+                _filterChip('COMPLETED', '${appState.translate('filter_completed')} ($completedCount)'),
               ],
             ),
           ),
@@ -1194,10 +1230,10 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                 child: const Icon(Icons.people_outline_rounded, size: 18, color: Color(0xFF0284C7)),
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Recent Citizen Encounters',
-                  style: TextStyle(
+                  appState.translate('registered_citizens_section'),
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
@@ -1206,9 +1242,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               ),
               InkWell(
                 onTap: () => Navigator.pushNamed(context, '/patient-search'),
-                child: const Text(
-                  'View All',
-                  style: TextStyle(
+                child: Text(
+                  appState.translate('view_all'),
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: AppColors.forest,
@@ -1219,12 +1255,13 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
           ),
           const SizedBox(height: 12),
           if (recentPatients.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Center(
                 child: Text(
-                  'No registered patients yet. Tap "+ New Patient" to register.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  appState.translate('no_registered_yet'),
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  textAlign: TextAlign.center,
                 ),
               ),
             )
@@ -1288,7 +1325,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                 appState.selectPatient(patient);
                 Navigator.pushNamed(context, '/assessment-form');
               },
-              child: const Text('Assess', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              child: Text(appState.translate('assess_button'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1299,36 +1336,170 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   void _showWorkerProfileDialog(BuildContext context, AppState appState) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('ASHA Worker Profile', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const CircleAvatar(
-                backgroundColor: Color(0xFFE8F5E9),
-                child: Icon(Icons.person, color: AppColors.forest),
-              ),
-              title: Text(appState.workerName, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(appState.workerId),
+      builder: (ctx) => Consumer<AppState>(
+        builder: (ctx, state, _) {
+          final currentLang = state.currentLanguage;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.account_circle_outlined, color: AppColors.forest, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    state.translate('profile_title'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  ),
+                ),
+              ],
             ),
-            const Divider(),
-            Text('Assigned Center: ${appState.workerCenter}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
-            const SizedBox(height: 6),
-            Text('Network State: ${appState.isOnline ? "Online" : "Offline (Local SQLite)"}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
-            const SizedBox(height: 6),
-            Text('Total Registered Patients: ${appState.patients.length}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close', style: TextStyle(color: AppColors.forest, fontWeight: FontWeight.bold)),
-          )
-        ],
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFE8F5E9),
+                        child: Icon(Icons.person, color: AppColors.forest),
+                      ),
+                      title: Text(state.workerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text(state.workerId),
+                    ),
+                    const Divider(height: 20),
+                    Text(
+                      '${state.translate('assigned_center')}: ${state.workerCenter}',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${state.translate('network_state')}: ${state.isOnline ? state.translate('online') : state.translate('offline')}',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${state.translate('registered_citizens')}: ${state.patients.length}',
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1),
+                    const SizedBox(height: 14),
+
+                    // Language Selector Header
+                    Row(
+                      children: [
+                        const Icon(Icons.language_rounded, color: AppColors.forest, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          state.translate('app_language'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.forest,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      state.translate('language_desc'),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Language Option Buttons (English, Hindi, Marathi)
+                    Column(
+                      children: AppLanguage.values.map((lang) {
+                        final isSelected = lang == currentLang;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: InkWell(
+                            onTap: () async {
+                              await state.setLanguage(lang);
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.forest.withValues(alpha: 0.1) : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected ? AppColors.forest : const Color(0xFFE2E8F0),
+                                  width: isSelected ? 1.8 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 12,
+                                    backgroundColor: isSelected ? AppColors.forest : const Color(0xFFCBD5E1),
+                                    child: isSelected
+                                        ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                        : Text(
+                                            lang.code.toUpperCase(),
+                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          lang.nativeName,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: isSelected ? AppColors.forest : const Color(0xFF1E293B),
+                                          ),
+                                        ),
+                                        Text(
+                                          '${lang.name} · ${lang.description}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: isSelected ? AppColors.forest : const Color(0xFF64748B),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.forest,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Text(
+                                        'Active',
+                                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  state.translate('close'),
+                  style: const TextStyle(color: AppColors.forest, fontWeight: FontWeight.bold),
+                ),
+              )
+            ],
+          );
+        },
       ),
     );
   }
