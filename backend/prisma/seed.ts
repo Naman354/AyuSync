@@ -901,6 +901,36 @@ async function main() {
     }
   });
 
+  // Referral for Ramesh Kulkarni (Elderly Diabetic with Essential Hypertension)
+  const refRamesh = await prisma.referral.create({
+    data: {
+      id: 'ref-ramesh-kulkarni',
+      patientId: 'pat-ramesh-kulkarni',
+      originId: facKhandalaPhc.id,
+      destinationId: facBaramatiChc.id,
+      reason: 'Uncontrolled Type 2 Diabetes with Grade 1 Essential Hypertension; HbA1c 8.4%',
+      urgency: 'PRIORITY',
+      status: 'COUNTER_REFERRED',
+      events: {
+        create: [
+          { statusFrom: null, statusTo: 'CREATED', notes: 'ASHA worker flagged elevated fasting glucose and BP during routine village survey', createdAt: d(-4) },
+          { statusFrom: 'CREATED', statusTo: 'SUBMITTED', notes: 'Dispatched to Baramati CHC for physician review', createdAt: d(-4, 2) },
+          { statusFrom: 'SUBMITTED', statusTo: 'ACCEPTED', notes: 'Dr. Rajesh Deshmukh accepted referral', createdAt: d(-3) },
+          { statusFrom: 'ACCEPTED', statusTo: 'IN_CONSULTATION', notes: 'Evaluation & fasting glucose profile completed', createdAt: d(-2) },
+          { statusFrom: 'IN_CONSULTATION', statusTo: 'COUNTER_REFERRED', notes: 'Counter-referral care plan dispatched to ASHA Sunita Patil', createdAt: d(-1) }
+        ]
+      },
+      counterReferral: {
+        create: {
+          outcome: 'Type 2 Diabetes Mellitus with Essential Hypertension. Glycemic target fasting < 130 mg/dL.',
+          treatment: 'Tab Metformin 500mg BD after meals, Tab Telmisartan 40mg OD morning',
+          instructions: 'ASHA worker to confirm Metformin 500mg BD compliance & check fasting sugar. Advise low sodium diet and 30-minute daily brisk walking.',
+          requiresFollowUp: true
+        }
+      }
+    }
+  });
+
   // Referral 2: Aniket Gaikwad (SUBMITTED today from Khandala PHC to Baramati CHC)
   const refAniket = await prisma.referral.create({
     data: {

@@ -9,6 +9,7 @@ import ReferralSuccess from './pages/ReferralSuccess';
 import CareGaps from './pages/CareGaps';
 import Patients from './pages/Patients';
 import PatientProfile from './pages/PatientProfile';
+import PatientDashboard from './pages/PatientDashboard';
 import FacilityReadiness from './pages/FacilityReadiness';
 import Queue from './pages/Queue';
 import {
@@ -83,22 +84,24 @@ const ProtectedRoute = () => {
   const switchRole = () => {
     let newRole = 'DOCTOR';
     let newName = 'Dr. Rajesh Deshmukh';
+    let patientId = user.patientId;
     if (currentRole === 'DOCTOR') {
       newRole = 'WORKER';
       newName = 'Sunita Patil';
     } else if (currentRole === 'WORKER') {
       newRole = 'PATIENT';
       newName = 'Ramesh Kulkarni';
+      patientId = patientId || 'pat-ramesh-kulkarni';
     } else {
       newRole = 'DOCTOR';
       newName = 'Dr. Rajesh Deshmukh';
     }
 
-    const updated = { ...user, role: newRole, name: newName };
+    const updated = { ...user, role: newRole, name: newName, patientId };
     localStorage.setItem('ayusync_user', JSON.stringify(updated));
     setCurrentRole(newRole);
     if (newRole === 'WORKER') window.location.href = '/worker';
-    else if (newRole === 'PATIENT') window.location.href = user.patientId ? `/patients/${user.patientId}` : '/patients';
+    else if (newRole === 'PATIENT') window.location.href = '/patient';
     else window.location.href = '/dashboard';
   };
 
@@ -111,7 +114,7 @@ const ProtectedRoute = () => {
         <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-4 sm:px-6 gap-4">
 
           {/* Brand */}
-          <Link to={isWorker ? '/worker' : isPatient ? (user.patientId ? `/patients/${user.patientId}` : '/patients') : '/dashboard'} className="flex items-center gap-2 shrink-0 group">
+          <Link to={isWorker ? '/worker' : isPatient ? '/patient' : '/dashboard'} className="flex items-center gap-2 shrink-0 group">
             <div className="w-8 h-8 rounded-lg bg-[#1e6641] text-white flex items-center justify-center group-hover:opacity-90 transition-opacity">
               <HeartPulse size={18} strokeWidth={2} />
             </div>
@@ -131,8 +134,7 @@ const ProtectedRoute = () => {
               </>
             ) : isPatient ? (
               <>
-                <NavLink to={user.patientId ? `/patients/${user.patientId}` : '/patients'} exact><Users size={15} />My Health Record</NavLink>
-                <NavLink to="/patients"><Users size={15} />All Patient Records</NavLink>
+                <NavLink to="/patient" exact><Users size={15} />My Health Portal</NavLink>
               </>
             ) : (
               <>
@@ -271,6 +273,13 @@ const ProtectedRoute = () => {
               <span>Patients</span>
             </Link>
           </>
+        ) : isPatient ? (
+          <>
+            <Link to="/patient" className="flex flex-col items-center text-[10px] font-medium text-[#1e6641]">
+              <Users size={18} />
+              <span>My Portal</span>
+            </Link>
+          </>
         ) : (
           <>
             <Link to="/dashboard" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
@@ -297,6 +306,14 @@ const ProtectedRoute = () => {
   );
 };
 
+function PatientsRouteGuard() {
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  if (user.role === 'PATIENT') {
+    return <Navigate to="/patient" replace />;
+  }
+  return <Patients />;
+}
+
 // ─── Root app ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [splashDone, setSplashDone] = useState(
@@ -319,10 +336,11 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard"         element={<Dashboard />} />
             <Route path="/worker"            element={<WorkerDashboard />} />
+            <Route path="/patient"           element={<PatientDashboard />} />
             <Route path="/intake"            element={<PatientIntakeFlow />} />
             <Route path="/referral-success"  element={<ReferralSuccess />} />
             <Route path="/followups"         element={<CareGaps />} />
-            <Route path="/patients"          element={<Patients />} />
+            <Route path="/patients"          element={<PatientsRouteGuard />} />
             <Route path="/patients/:id"      element={<PatientProfile />} />
             <Route path="/queue"             element={<Queue />} />
             <Route path="/facilities"        element={<FacilityReadiness />} />
