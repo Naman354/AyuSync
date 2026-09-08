@@ -149,6 +149,30 @@ class LocalDatabase {
     return await db.query('patients', orderBy: 'createdAt DESC');
   }
 
+  Future<List<Map<String, dynamic>>> getUnSyncedPatients() async {
+    final db = await instance.database;
+    return await db.query('patients', where: 'isSynced = ?', whereArgs: [0], orderBy: 'createdAt DESC');
+  }
+
+  Future<void> markPatientSynced(String patientId) async {
+    final db = await instance.database;
+    await db.update(
+      'patients',
+      {'isSynced': 1},
+      where: 'id = ?',
+      whereArgs: [patientId],
+    );
+  }
+
+  Future<void> updatePatientId(String oldId, String newId) async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.update('patients', {'id': newId, 'isSynced': 1}, where: 'id = ?', whereArgs: [oldId]);
+      await txn.update('assessments', {'patientId': newId}, where: 'patientId = ?', whereArgs: [oldId]);
+      await txn.update('follow_ups', {'patientId': newId}, where: 'patientId = ?', whereArgs: [oldId]);
+    });
+  }
+
   Future<void> insertAssessment(Map<String, dynamic> assessment) async {
     final db = await instance.database;
     await db.insert('assessments', assessment, conflictAlgorithm: ConflictAlgorithm.replace);

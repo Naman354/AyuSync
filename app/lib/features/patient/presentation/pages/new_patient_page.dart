@@ -102,8 +102,10 @@ class _NewPatientPageState extends State<NewPatientPage> {
 
     try {
       final parsedAge = int.tryParse(_ageController.text.trim()) ?? _calculateAgeFromDob(_dobController.text);
-      final rawPhone = _phoneController.text.trim();
-      final formattedPhone = rawPhone.startsWith('+') ? rawPhone : '+91 $rawPhone';
+      final rawPhoneDigits = _phoneController.text.replaceAll(RegExp(r'[^\d]'), '');
+      final formattedPhone = _phoneController.text.trim().startsWith('+')
+          ? _phoneController.text.trim().replaceAll(RegExp(r'[\s\-]'), '')
+          : (rawPhoneDigits.length == 10 ? '+91$rawPhoneDigits' : '+91$rawPhoneDigits');
 
       // 1. Register Patient with strictly backend fields
       final patient = await appState.registerPatient(

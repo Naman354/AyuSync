@@ -125,9 +125,13 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                       children: [
                         const Icon(Icons.badge_outlined, size: 16, color: Color(0xFF2563EB)),
                         const SizedBox(width: 6),
-                        Text(
-                          '${currentTask.doctorName} • ${currentTask.doctorFacility}',
-                          style: TextStyle(fontSize: 12, color: Colors.blue.shade900, fontWeight: FontWeight.w500),
+                        Expanded(
+                          child: Text(
+                            '${currentTask.doctorName} • ${currentTask.doctorFacility}',
+                            style: TextStyle(fontSize: 12, color: Colors.blue.shade900, fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
                         ),
                       ],
                     ),
@@ -156,10 +160,13 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                       (med) => Padding(
                         padding: const EdgeInsets.only(bottom: 6.0),
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(Icons.medication, size: 18, color: Colors.teal),
                             const SizedBox(width: 8),
-                            Text(med, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            Expanded(
+                              child: Text(med, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            ),
                           ],
                         ),
                       ),

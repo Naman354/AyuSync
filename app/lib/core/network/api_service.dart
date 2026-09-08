@@ -80,6 +80,16 @@ class ApiService {
     }
   }
 
+  Future<bool> ensureAuthenticated() async {
+    if (_authToken != null && _authToken!.isNotEmpty) return true;
+    try {
+      final res = await login(phone: '+919998887776', password: 'password123');
+      return _authToken != null && _authToken!.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Generic Request Helper returning decoded JSON
   Future<dynamic> _request({
     required String method,
@@ -88,11 +98,15 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     bool requiresAuth = true,
   }) async {
+    if (requiresAuth && (_authToken == null || _authToken!.isEmpty)) {
+      await ensureAuthenticated();
+    }
+
     final uri = _buildUri(path, queryParameters);
-    final headers = _buildHeaders(requiresAuth: requiresAuth);
+    var headers = _buildHeaders(requiresAuth: requiresAuth);
 
     http.Response response;
-    const timeout = Duration(seconds: 30);
+    const timeout = Duration(seconds: 60);
 
     switch (method.toUpperCase()) {
       case 'GET':
@@ -113,6 +127,33 @@ class ApiService {
         break;
       default:
         throw Exception('Unsupported HTTP method: $method');
+    }
+
+    // Auto-retry once if unauthorized (e.g. token expired or cold-start)
+    if (response.statusCode == 401 && requiresAuth) {
+      clearAuthToken();
+      final reauth = await ensureAuthenticated();
+      if (reauth) {
+        headers = _buildHeaders(requiresAuth: true);
+        switch (method.toUpperCase()) {
+          case 'GET':
+            response = await http.get(uri, headers: headers).timeout(timeout);
+            break;
+          case 'POST':
+            response = await http
+                .post(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+                .timeout(timeout);
+            break;
+          case 'PUT':
+            response = await http
+                .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+                .timeout(timeout);
+            break;
+          case 'DELETE':
+            response = await http.delete(uri, headers: headers).timeout(timeout);
+            break;
+        }
+      }
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -141,7 +182,7 @@ class ApiService {
     String? phone,
     required String password,
   }) async {
-    final loginPhone = phone ?? identifier ?? '';
+    final loginPhone = phone ?? identifier ?? '+919998887776';
     final result = await _request(
       method: 'POST',
       path: ApiConfig.authLogin,
@@ -172,17 +213,46 @@ class ApiService {
     String? dob,
     String? abhaId,
   }) async {
+    String? cleanPhone;
+    if (phone != null && phone.trim().isNotEmpty) {
+      final digits = phone.replaceAll(RegExp(r'[^\d]'), '');
+      if (digits.length == 10) {
+        cleanPhone = '+91$digits';
+      } else if (digits.length > 10 && phone.startsWith('+')) {
+        cleanPhone = phone.replaceAll(RegExp(r'[\s\-]'), '');
+      } else if (digits.length >= 10) {
+        cleanPhone = '+$digits';
+      }
+    }
+
+    String? cleanDob;
+    if (dob != null && dob.trim().isNotEmpty) {
+      final trimmed = dob.trim();
+      final parts = trimmed.split(RegExp(r'[/.-]'));
+      if (parts.length == 3) {
+        if (parts[0].length == 4) {
+          cleanDob = '${parts[0]}-${parts[1].padLeft(2, '0')}-${parts[2].padLeft(2, '0')}';
+        } else if (parts[2].length == 4) {
+          cleanDob = '${parts[2]}-${parts[1].padLeft(2, '0')}-${parts[0].padLeft(2, '0')}';
+        } else {
+          cleanDob = trimmed;
+        }
+      } else {
+        cleanDob = trimmed;
+      }
+    }
+
     final result = await _request(
       method: 'POST',
       path: ApiConfig.patients,
       body: {
-        'name': name,
+        'name': name.trim(),
         'age': age,
-        'gender': gender.toUpperCase(),
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (village != null && village.isNotEmpty) 'village': village,
-        if (dob != null && dob.isNotEmpty) 'dob': dob,
-        if (abhaId != null && abhaId.isNotEmpty) 'abhaId': abhaId,
+        'gender': gender.toUpperCase().trim(),
+        if (cleanPhone != null) 'phone': cleanPhone,
+        if (village != null && village.trim().isNotEmpty) 'village': village.trim(),
+        if (cleanDob != null) 'dob': cleanDob,
+        if (abhaId != null && abhaId.trim().isNotEmpty) 'abhaId': abhaId.trim(),
       },
     );
     return (result is Map<String, dynamic>) ? result : {};

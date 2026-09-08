@@ -47,17 +47,77 @@ class SyncEngine {
   Future<bool> syncNow({String workerId = 'ASHA-WORKER-APP'}) async {
     if (_isSyncing) return false;
 
-    final pending = await LocalDatabase.instance.getPendingSyncMutations();
+    // 1. Ensure authenticated with cached or fresh Bearer token
+    await ApiService.instance.ensureAuthenticated();
+
+    // 2. Fetch pending mutations from SQLite sync_queue
+    final pending = List<Map<String, dynamic>>.from(
+      await LocalDatabase.instance.getPendingSyncMutations(),
+    );
+
+    // 3. Resilient recovery: also check for un-synced patients in SQLite patients table
+    final unSyncedPatients = await LocalDatabase.instance.getUnSyncedPatients();
+    final queuedPatientIds = pending
+        .where((p) => p['entity'] == 'PATIENT')
+        .map((p) => p['entityId']?.toString())
+        .toSet();
+
+    for (var p in unSyncedPatients) {
+      final pId = p['id']?.toString() ?? '';
+      if (pId.isNotEmpty && !queuedPatientIds.contains(pId)) {
+        final opId = 'OP-PAT-$pId-${DateTime.now().millisecondsSinceEpoch}';
+        final payload = {
+          'id': pId,
+          'name': p['name'] ?? 'Community Patient',
+          'age': p['age'] is int ? p['age'] : (int.tryParse(p['age']?.toString() ?? '') ?? 30),
+          'gender': (p['gender']?.toString() ?? 'FEMALE').toUpperCase(),
+          'phone': p['phone']?.toString() ?? '',
+          'village': p['village']?.toString() ?? '',
+          if (p['dob'] != null && p['dob'].toString().isNotEmpty) 'dob': p['dob'].toString(),
+          if (p['abhaId'] != null && p['abhaId'].toString().isNotEmpty) 'abhaId': p['abhaId'].toString(),
+        };
+
+        // Queue in SQLite
+        await LocalDatabase.instance.queueMutation({
+          'operationId': opId,
+          'entityId': pId,
+          'entity': 'PATIENT',
+          'operation': 'CREATE',
+          'payload': jsonEncode(payload),
+          'createdTime': DateTime.now().toIso8601String(),
+          'retryCount': 0,
+          'syncStatus': 'PENDING',
+        });
+
+        pending.add({
+          'operationId': opId,
+          'entityId': pId,
+          'entity': 'PATIENT',
+          'operation': 'CREATE',
+          'payload': jsonEncode(payload),
+          'createdTime': DateTime.now().toIso8601String(),
+        });
+        queuedPatientIds.add(pId);
+      }
+    }
+
     if (pending.isEmpty) return true;
 
     _isSyncing = true;
     try {
       final mutations = pending.map((p) {
+        dynamic decodedPayload;
+        try {
+          decodedPayload = jsonDecode(p['payload'] as String);
+        } catch (_) {
+          decodedPayload = p['payload'];
+        }
+
         return {
           'operationId': p['operationId'],
           'entity': p['entity'],
           'action': p['operation'],
-          'payload': jsonDecode(p['payload'] as String),
+          'payload': decodedPayload,
           'timestamp': p['createdTime'],
         };
       }).toList();
@@ -69,8 +129,26 @@ class SyncEngine {
 
       if (result.containsKey('results')) {
         for (var res in result['results']) {
-          if (res['status'] == 'SUCCESS' || res['status'] == 'ALREADY_SYNCED') {
-            await LocalDatabase.instance.markMutationSynced(res['operationId']);
+          final opId = res['operationId']?.toString() ?? '';
+          final status = res['status']?.toString() ?? '';
+
+          if (status == 'SUCCESS' || status == 'ALREADY_SYNCED') {
+            await LocalDatabase.instance.markMutationSynced(opId);
+
+            // Find matching mutation to update entity table
+            final match = pending.firstWhere(
+              (p) => p['operationId'] == opId,
+              orElse: () => <String, dynamic>{},
+            );
+
+            if (match.isNotEmpty) {
+              final entity = match['entity']?.toString();
+              final entityId = match['entityId']?.toString();
+
+              if (entity == 'PATIENT' && entityId != null && entityId.isNotEmpty) {
+                await LocalDatabase.instance.markPatientSynced(entityId);
+              }
+            }
           }
         }
         await LocalDatabase.instance.clearSyncedMutations();

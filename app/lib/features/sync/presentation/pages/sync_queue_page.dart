@@ -21,23 +21,34 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
       appState.toggleOnlineStatus();
     }
 
-    await appState.syncAllQueueItems();
+    final success = await appState.syncAllQueueItems();
 
     if (!mounted) return;
     setState(() => _isSyncing = false);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ 11 Sync / Upload Completed. Local mutations synchronized to server.'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Sync & Upload Successful! All local patient records uploaded to server.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
 
-    // If an assessment was recently created, proceed directly to 12 AI Triage + Reasoning
-    if (appState.currentAssessment != null) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/triage/ai_result');
+      // If an assessment was recently created, proceed directly to 12 AI Triage + Reasoning
+      if (appState.currentAssessment != null) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, '/triage/ai_result');
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(appState.errorMessage ?? 'Sync encountered an issue. Check connection and try again.'),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -210,17 +221,11 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
-                    child: const Text('Dashboard'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
+                SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
@@ -237,8 +242,24 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                           )
                         : const Icon(Icons.cloud_upload),
                     label: Text(
-                      _isSyncing ? 'Syncing...' : '11 Sync / Upload Now',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      _isSyncing ? 'Syncing...' : 'Sync / Upload Queue Now',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
+                    icon: const Icon(Icons.home_outlined, size: 18),
+                    label: const Text(
+                      'Back to Home Dashboard',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                   ),
                 ),

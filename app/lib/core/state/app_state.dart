@@ -155,9 +155,63 @@ class AppState extends ChangeNotifier {
         for (var map in dbPatients) {
           _patients.add(Patient.fromMap(map));
         }
-        notifyListeners();
       }
-    } catch (_) {}
+
+      // Rehydrate _syncQueue from SQLite sync_queue table
+      final pending = await LocalDatabase.instance.getPendingSyncMutations();
+      _syncQueue.clear();
+      final seenEntityIds = <String>{};
+
+      for (var p in pending) {
+        final entityId = p['entityId']?.toString() ?? '';
+        final entity = p['entity']?.toString() ?? 'ITEM';
+        final action = p['operation']?.toString() ?? 'MUTATION';
+        seenEntityIds.add(entityId);
+
+        String description = '$entity [$action]';
+        try {
+          final payload = jsonDecode(p['payload'] as String);
+          if (entity == 'PATIENT') {
+            description = 'New Patient Registration: ${payload['name'] ?? entityId} (${payload['village'] ?? ''})';
+          } else if (entity == 'ASSESSMENT') {
+            description = 'Clinical Vitals & Assessment: $entityId';
+          } else if (entity == 'REFERRAL') {
+            description = 'Emergency Referral: $entityId';
+          }
+        } catch (_) {}
+
+        _syncQueue.add(SyncItem(
+          id: p['operationId']?.toString() ?? _uuid.v4(),
+          entityType: entity,
+          action: action,
+          description: description,
+          status: p['syncStatus']?.toString() ?? 'PENDING',
+        ));
+      }
+
+      // Also ensure any un-synced patients in SQLite patients table are represented
+      final unSynced = await LocalDatabase.instance.getUnSyncedPatients();
+      for (var un in unSynced) {
+        final pId = un['id']?.toString() ?? '';
+        if (pId.isNotEmpty && !seenEntityIds.contains(pId)) {
+          seenEntityIds.add(pId);
+          _syncQueue.add(SyncItem(
+            id: _uuid.v4(),
+            entityType: 'PATIENT',
+            action: 'CREATE',
+            description: 'New Patient Registration: ${un['name']} (${un['village']})',
+            status: 'PENDING',
+          ));
+        }
+      }
+
+      notifyListeners();
+
+      // Ensure API authentication is ready in background
+      ApiService.instance.ensureAuthenticated();
+    } catch (e) {
+      debugPrint('Error loading from local db: $e');
+    }
   }
 
   void toggleOnlineStatus() {
@@ -376,42 +430,48 @@ class AppState extends ChangeNotifier {
     String? abhaId,
   }) async {
     final tempId = 'PAT-${_uuid.v4().substring(0, 8)}';
+    final cleanAbha = (abhaId != null && abhaId.trim().isNotEmpty) ? abhaId.trim() : null;
+
     Patient newPatient = Patient(
       id: tempId,
-      name: name,
+      name: name.trim(),
       age: age,
       gender: gender,
-      phone: phone,
-      village: village,
-      dob: dob,
-      abhaId: (abhaId != null && abhaId.isNotEmpty) ? abhaId : '91-${_uuid.v4().substring(0, 4)}-${_uuid.v4().substring(0, 4)}',
+      phone: phone.trim(),
+      village: village.trim(),
+      dob: dob?.trim(),
+      abhaId: cleanAbha,
       createdAt: DateTime.now(),
       isSynced: false,
     );
 
+    bool directUploadSuccess = false;
     if (_isOnline) {
       try {
         final created = await ApiService.instance.createPatient(
-          name: name,
-          age: age,
-          gender: gender,
-          phone: phone,
-          village: village,
-          dob: dob,
+          name: newPatient.name,
+          age: newPatient.age,
+          gender: newPatient.gender,
+          phone: newPatient.phone,
+          village: newPatient.village,
+          dob: newPatient.dob,
           abhaId: newPatient.abhaId,
         );
 
-        if (created.containsKey('id')) {
+        if (created.containsKey('id') && created['id'] != null) {
+          final serverId = created['id'].toString();
           newPatient = newPatient.copyWith(
-            id: created['id'].toString(),
+            id: serverId,
             isSynced: true,
           );
+          directUploadSuccess = true;
         }
       } catch (e) {
-        debugPrint('Direct backend create patient failed, queuing mutation: $e');
-        _queuePatientMutation(newPatient);
+        debugPrint('Direct backend create patient failed, will queue mutation: $e');
       }
-    } else {
+    }
+
+    if (!directUploadSuccess) {
       _queuePatientMutation(newPatient);
     }
 
@@ -442,6 +502,8 @@ class AppState extends ChangeNotifier {
         'gender': patient.gender.toUpperCase(),
         'phone': patient.phone,
         'village': patient.village,
+        if (patient.dob != null && patient.dob!.isNotEmpty) 'dob': patient.dob,
+        if (patient.abhaId != null && patient.abhaId!.isNotEmpty) 'abhaId': patient.abhaId,
       },
     );
   }
@@ -788,7 +850,7 @@ class AppState extends ChangeNotifier {
   }
 
   // --- Manual Sync Trigger ---
-  Future<void> syncAllQueueItems() async {
+  Future<bool> syncAllQueueItems() async {
     for (int i = 0; i < _syncQueue.length; i++) {
       _syncQueue[i] = _syncQueue[i].copyWith(status: 'SYNCING');
     }
@@ -804,9 +866,20 @@ class AppState extends ChangeNotifier {
     if (success) {
       await Future.delayed(const Duration(milliseconds: 600));
       _syncQueue.clear();
+
+      // Reload local SQLite database so in-memory patients have isSynced = true
+      final dbPatients = await LocalDatabase.instance.getPatients();
+      if (dbPatients.isNotEmpty) {
+        _patients.clear();
+        for (var map in dbPatients) {
+          _patients.add(Patient.fromMap(map));
+        }
+      }
+
       await fetchBackendData();
     }
     notifyListeners();
+    return success;
   }
 
   List<Patient> searchPatients(String query) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/state/app_state.dart';
+import 'core/sync/sync_engine.dart';
 import 'core/theme/app_colors.dart';
 import 'core/models/followup_model.dart';
 import 'features/auth/presentation/pages/splash_page.dart';
@@ -25,6 +26,7 @@ import 'features/followup/presentation/pages/record_followup_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SyncEngine().init();
   runApp(
     MultiProvider(
       providers: [
