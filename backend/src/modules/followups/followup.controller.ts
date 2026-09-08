@@ -379,3 +379,53 @@ export const completeFollowUp = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+/**
+ * ESCALATE FOLLOW-UP TO MEDICAL OFFICER
+ * PATCH /api/followups/:id/escalate
+ */
+export const escalateFollowUp = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    let updated: any = null;
+    try {
+      const existing = await prisma.followUp.findUnique({ where: { id } });
+      const currentNotes = existing?.notes || '';
+      const escalationStamp = `[ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`;
+      const combinedNotes = currentNotes.includes('[ESCALATED TO MO')
+        ? currentNotes
+        : `${currentNotes ? currentNotes + ' · ' : ''}${escalationStamp}${reason ? ` Reason: ${reason}` : ''}`;
+
+      updated = await prisma.followUp.update({
+        where: { id },
+        data: {
+          status: 'ESCALATED',
+          notes: combinedNotes,
+        },
+        include: { patient: true }
+      });
+    } catch {
+      // In-memory demo fallback: update DEMO_SEED_FOLLOWUPS if present
+      const demoItem = DEMO_SEED_FOLLOWUPS.find(f => f.id === id);
+      if (demoItem) {
+        demoItem.status = 'ESCALATED';
+        demoItem.notes = `${demoItem.notes || ''} [ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`;
+        updated = demoItem;
+      } else {
+        updated = {
+          id,
+          status: 'ESCALATED',
+          notes: `[ESCALATED TO MO: ${new Date().toLocaleDateString('en-IN')}]`
+        };
+      }
+    }
+
+    res.json({ success: true, followUp: updated, message: 'Task successfully escalated to Medical Officer.' });
+  } catch (error: any) {
+    console.error('[followup] escalateFollowUp error:', error.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+

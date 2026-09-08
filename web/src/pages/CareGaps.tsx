@@ -38,6 +38,23 @@ const CATEGORY_COLOR: Record<Task['category'], string> = {
   GENERAL: 'bg-emerald-50 text-[#1e6641] border-emerald-200',
 };
 
+const ESCALATED_STORAGE_KEY = 'ayusync_escalated_followups';
+
+function getPersistedEscalations(): Set<string> {
+  try {
+    const raw = localStorage.getItem(ESCALATED_STORAGE_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function savePersistedEscalation(id: string) {
+  const current = getPersistedEscalations();
+  current.add(id);
+  localStorage.setItem(ESCALATED_STORAGE_KEY, JSON.stringify(Array.from(current)));
+}
+
 const DEMO_TASKS: Task[] = [
   {
     id: '1',
@@ -66,20 +83,6 @@ const DEMO_TASKS: Task[] = [
     notes: 'Prescribed Metformin 500mg. Confirm stock available at sub-center and assess diet compliance.',
   },
   {
-    id: '3',
-    patientName: 'Savita Jadhav',
-    age: 48,
-    gender: 'FEMALE',
-    village: 'Khandala Ward 1',
-    taskTitle: 'Asthma inhaler technique follow-up',
-    category: 'ONGOING',
-    dueDate: 'Today',
-    isOverdue: false,
-    completed: true,
-    notes: 'Ensure proper spacer use. BP 122/80 verified at sub-center.',
-    completedNotes: 'Inhaler demonstrated correctly. Oxygen saturation 98%.',
-  },
-  {
     id: '4',
     patientName: 'Aarav Patel',
     age: 2,
@@ -93,22 +96,21 @@ const DEMO_TASKS: Task[] = [
     notes: 'Immunization drive session at Khandala Anganwadi. Verify mother brings MCP card.',
   },
   {
-    id: '5',
-    patientName: 'Meena Kumari',
-    age: 34,
+    id: '6',
+    patientName: 'Sunita Chavan',
+    age: 29,
     gender: 'FEMALE',
     village: 'Khandala Ward 3',
-    taskTitle: 'Post-discharge recovery check-in',
-    category: 'GENERAL',
+    taskTitle: 'Distribute monthly IFA supply & verify conjunctival pallor',
+    category: 'MOTHER_BABY',
     dueDate: 'Today',
     isOverdue: false,
-    completed: true,
-    notes: 'Discharged from Baramati CHC after acute gastroenteritis. Verify ORS and zinc compliance.',
-    completedNotes: 'Fully recovered. Hydration normal.',
-  },
+    completed: false,
+    notes: 'Severe anemia history. Supply 30 IFA red tablets and encourage dietary green vegetables.',
+  }
 ];
 
-type FilterType = 'ALL' | 'OVERDUE' | 'TODAY' | 'COMPLETED';
+type FilterType = 'ALL' | 'OVERDUE' | 'TODAY';
 
 export default function CareGaps() {
   const [tasks, setTasks] = useState<Task[]>(DEMO_TASKS);
@@ -117,14 +119,16 @@ export default function CareGaps() {
   const [error, setError] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
-  // Escalation tracking
+  // Persistent escalation tracking across refreshes
   const [escalating, setEscalating] = useState<string | null>(null);
-  const [escalated, setEscalated] = useState<Set<string>>(new Set());
+  const [escalated, setEscalated] = useState<Set<string>>(() => getPersistedEscalations());
+
+  // Completion animation tracking
+  const [animatingTaskIds, setAnimatingTaskIds] = useState<Set<string>>(new Set());
 
   // Completion modal state
   const [activeTaskForCompletion, setActiveTaskForCompletion] = useState<Task | null>(null);
   const [completionNote, setCompletionNote] = useState('');
-  const [completing, setCompleting] = useState(false);
 
   // Fetch live follow-ups from API with resilient fallback
   useEffect(() => {
@@ -132,7 +136,20 @@ export default function CareGaps() {
       .then(res => {
         const live: any[] = Array.isArray(res.data) ? res.data : [];
         if (live.length > 0) {
-          setTasks(live.map(f => {
+          // Completed tasks should not remain visible on screen
+          const activeOnly = live.filter(f => f.status !== 'COMPLETED');
+
+          // Sync escalated items into persistent set
+          const persisted = getPersistedEscalations();
+          activeOnly.forEach(f => {
+            if (f.status === 'ESCALATED' || (f.notes && f.notes.includes('[ESCALATED TO MO'))) {
+              persisted.add(f.id);
+            }
+          });
+          localStorage.setItem(ESCALATED_STORAGE_KEY, JSON.stringify(Array.from(persisted)));
+          setEscalated(new Set(persisted));
+
+          setTasks(activeOnly.map(f => {
             const reason = (f.reason || '').toLowerCase();
             let cat: Task['category'] = 'GENERAL';
             if (reason.includes('pregnancy') || reason.includes('maternal') || reason.includes('suture') || reason.includes('baby')) {
@@ -159,7 +176,7 @@ export default function CareGaps() {
                 : 'Today',
               dueDateRaw: f.dueDate,
               isOverdue: isOv,
-              completed: f.status === 'COMPLETED',
+              completed: false,
               notes: f.notes || '',
               completedNotes: f.completionNotes || '',
             };
@@ -177,60 +194,62 @@ export default function CareGaps() {
     setCompletionNote('Home visit completed. Patient condition stable and verified.');
   };
 
+  // Mark task completed: briefly cross out text, then remove card from visible list
   const handleConfirmCompletion = async () => {
     if (!activeTaskForCompletion) return;
-    setCompleting(true);
     const taskId = activeTaskForCompletion.id;
+    const patientName = activeTaskForCompletion.patientName;
     const notesToSave = completionNote.trim() || 'Completed by ASHA worker';
 
-    try {
-      await api.patch(`/followups/${taskId}/complete`, { completionNotes: notesToSave });
-    } catch {
-      // Optimistic completion for reliable UX
-    }
-
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: true, isOverdue: false, completedNotes: notesToSave } : t));
-    setFeedbackMsg(`Marked task for "${activeTaskForCompletion.patientName}" as completed.`);
-    setTimeout(() => setFeedbackMsg(''), 4000);
-    setCompleting(false);
+    // 1. Close modal and trigger strikethrough animation immediately
     setActiveTaskForCompletion(null);
+    setAnimatingTaskIds(prev => new Set(prev).add(taskId));
+
+    // 2. Dispatch completion to backend
+    api.patch(`/followups/${taskId}/complete`, { completionNotes: notesToSave }).catch(() => {});
+
+    // 3. Briefly animate task text being crossed out (400ms), then remove task card from visible list
+    setTimeout(() => {
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      setAnimatingTaskIds(prev => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+      setFeedbackMsg(`Completed recovery visit for "${patientName}".`);
+      setTimeout(() => setFeedbackMsg(''), 3500);
+    }, 450);
   };
 
-  // Quick 1-click escalate to District Health Officer
+  // Escalate to MO: updates backend and persists to localStorage so refresh never reverts it
   const handleEscalate = async (taskId: string, patientName: string) => {
     setEscalating(taskId);
+    savePersistedEscalation(taskId);
+    setEscalated(prev => new Set(prev).add(taskId));
+
     try {
+      await api.patch(`/followups/${taskId}/escalate`, { reason: 'Overdue recovery check > 48 hours' }).catch(() => {});
       await api.post('/notifications', {
         type: 'CARE_GAP_ESCALATION',
-        message: `OVERDUE ESCALATION: Patient ${patientName} missed mandatory 48-hour post-consultation recovery check. Dispatched for District Health Officer intervention.`,
-      });
-    } catch {
-      // Optimistic
+        message: `OVERDUE ESCALATION: Patient ${patientName} missed mandatory 48-hour post-consultation recovery check. Dispatched for District Health Officer & MO review.`,
+      }).catch(() => {});
     } finally {
-      setEscalated(prev => {
-        const s = new Set(prev);
-        s.add(taskId);
-        return s;
-      });
       setEscalating(null);
-      setFeedbackMsg(`Escalation alert sent to District Health Officer for ${patientName}.`);
+      setFeedbackMsg(`Escalation alert dispatched to Medical Officer for ${patientName}.`);
       setTimeout(() => setFeedbackMsg(''), 4000);
     }
   };
 
-  // Metrics
-  const overdueTasks = tasks.filter(t => !t.completed && t.isOverdue);
-  const dueTodayTasks = tasks.filter(t => !t.completed && !t.isOverdue);
-  const completedTasks = tasks.filter(t => t.completed);
-  const totalTasks = tasks.length;
-  const adherencePct = totalTasks > 0 ? Math.round((completedTasks.length / totalTasks) * 100) : 0;
+  // Metrics (Focused on active tasks only)
+  const overdueTasks = tasks.filter(t => t.isOverdue);
+  const dueTodayTasks = tasks.filter(t => !t.isOverdue);
+  const totalActiveTasks = tasks.length;
 
   // Filter & Search
   const filteredTasks = tasks.filter(t => {
     // Tab filter
-    if (filter === 'OVERDUE' && (!t.isOverdue || t.completed)) return false;
-    if (filter === 'TODAY' && (t.completed || t.isOverdue)) return false;
-    if (filter === 'COMPLETED' && !t.completed) return false;
+    if (filter === 'OVERDUE' && !t.isOverdue) return false;
+    if (filter === 'TODAY' && t.isOverdue) return false;
 
     // Search query match (patient name, village, task title)
     if (searchQuery.trim()) {
@@ -305,23 +324,23 @@ export default function CareGaps() {
             <div className="text-[11px] text-amber-700 mt-1 font-medium">Scheduled for home visit</div>
           </button>
 
-          {/* Completed Card */}
+          {/* Total Active Tasks Card */}
           <button
-            onClick={() => setFilter('COMPLETED')}
+            onClick={() => setFilter('ALL')}
             className={`text-left p-4 rounded-2xl border transition-all ${
-              filter === 'COMPLETED'
+              filter === 'ALL'
                 ? 'bg-[#e4efe7] border-[#1e6641]/40 ring-2 ring-[#1e6641]/20'
                 : 'bg-white hover:bg-[#e4efe7]/40 border-gray-100'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-[#1e6641] uppercase tracking-wide">Verified Completed</span>
+              <span className="text-xs font-semibold text-[#1e6641] uppercase tracking-wide">Active Home Visits</span>
               <div className="w-8 h-8 rounded-xl bg-[#e4efe7] text-[#1e6641] flex items-center justify-center">
                 <CheckCircle2 size={16} />
               </div>
             </div>
-            <div className="text-2xl font-bold text-gray-900">{completedTasks.length}</div>
-            <div className="text-[11px] text-gray-500 mt-1">{adherencePct}% recovery adherence</div>
+            <div className="text-2xl font-bold text-gray-900">{totalActiveTasks}</div>
+            <div className="text-[11px] text-gray-500 mt-1">Pending village verifications</div>
           </button>
         </div>
 
@@ -355,7 +374,7 @@ export default function CareGaps() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              All Tasks ({totalTasks})
+              All Active ({totalActiveTasks})
             </button>
             <button
               onClick={() => setFilter('TODAY')}
@@ -376,16 +395,6 @@ export default function CareGaps() {
               }`}
             >
               Overdue ({overdueTasks.length})
-            </button>
-            <button
-              onClick={() => setFilter('COMPLETED')}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                filter === 'COMPLETED'
-                  ? 'bg-[#1e6641] text-white'
-                  : 'bg-[#e4efe7] text-[#1e6641] hover:bg-emerald-100'
-              }`}
-            >
-              Completed ({completedTasks.length})
             </button>
           </div>
 
@@ -424,16 +433,16 @@ export default function CareGaps() {
         ) : (
           <div className="space-y-3">
             {filteredTasks.map(task => {
-              const isDone = task.completed;
-              const isOverdue = task.isOverdue && !isDone;
+              const isOverdue = task.isOverdue;
               const isTaskEscalated = escalated.has(task.id);
+              const isCrossedOut = animatingTaskIds.has(task.id);
 
               return (
                 <div
                   key={task.id}
-                  className={`bg-white rounded-2xl border transition-all p-4.5 flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                    isDone
-                      ? 'border-gray-100 bg-gray-50/40 opacity-75'
+                  className={`bg-white rounded-2xl border transition-all duration-300 p-4.5 flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+                    isCrossedOut
+                      ? 'opacity-30 scale-98 pointer-events-none bg-gray-50'
                       : isOverdue
                       ? 'border-red-200 shadow-xs'
                       : 'border-gray-100 hover:border-gray-200 shadow-xs'
@@ -443,20 +452,20 @@ export default function CareGaps() {
                   <div className="flex items-start gap-3.5 flex-1 min-w-0">
                     <div
                       className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        isDone
-                          ? 'bg-[#e4efe7] text-[#1e6641]'
+                        isCrossedOut
+                          ? 'bg-gray-100 text-gray-400'
                           : isOverdue
                           ? 'bg-red-100 text-red-600'
                           : 'bg-amber-100 text-amber-700'
                       }`}
                     >
-                      {isDone ? <CheckCircle2 size={20} /> : isOverdue ? <AlertTriangle size={20} /> : <Clock size={20} />}
+                      {isCrossedOut ? <CheckCircle2 size={20} /> : isOverdue ? <AlertTriangle size={20} /> : <Clock size={20} />}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       {/* Top Badges & Title */}
                       <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className={`text-sm font-bold ${isDone ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                        <span className={`text-sm font-bold transition-all duration-300 ${isCrossedOut ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                           {task.taskTitle}
                         </span>
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${CATEGORY_COLOR[task.category]}`}>
@@ -490,53 +499,38 @@ export default function CareGaps() {
                           {task.notes}
                         </div>
                       )}
-
-                      {/* Completed note if done */}
-                      {isDone && task.completedNotes && (
-                        <div className="mt-2 text-xs text-[#1e6641] bg-[#e4efe7]/50 rounded-xl px-3 py-1.5 border border-[#1e6641]/20">
-                          <span className="font-semibold">Visit notes: </span>
-                          {task.completedNotes}
-                        </div>
-                      )}
                     </div>
                   </div>
 
                   {/* Right Actions */}
                   <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                    {isDone ? (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#e4efe7] text-[#1e6641] text-xs font-semibold">
-                        <Check size={14} /> Completed
-                      </div>
-                    ) : (
-                      <>
-                        {/* Escalate button (for overdue) */}
-                        {isOverdue && (
-                          isTaskEscalated ? (
-                            <span className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-                              <Bell size={12} /> Escalated to MO
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleEscalate(task.id, task.patientName)}
-                              disabled={escalating === task.id}
-                              title="Alert District Health Officer & MO for urgent home visit intervention"
-                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors disabled:opacity-60"
-                            >
-                              <Bell size={13} />
-                              {escalating === task.id ? 'Escalating...' : 'Escalate to MO'}
-                            </button>
-                          )
-                        )}
-
-                        {/* Mark Complete button */}
+                    {/* Escalate button (for overdue) */}
+                    {isOverdue && (
+                      isTaskEscalated ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 text-red-700 border border-red-200 shadow-xs">
+                          <Bell size={12} className="text-red-600" /> Escalated to MO
+                        </span>
+                      ) : (
                         <button
-                          onClick={() => openCompleteModal(task)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1e6641] hover:bg-[#165032] text-white shadow-xs transition-colors"
+                          onClick={() => handleEscalate(task.id, task.patientName)}
+                          disabled={escalating === task.id || isCrossedOut}
+                          title="Alert District Health Officer & MO for urgent home visit intervention"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors disabled:opacity-60 shadow-xs"
                         >
-                          <Check size={14} /> Mark Visit Done
+                          <Bell size={13} />
+                          {escalating === task.id ? 'Escalating...' : 'Escalate to MO'}
                         </button>
-                      </>
+                      )
                     )}
+
+                    {/* Mark Complete button */}
+                    <button
+                      onClick={() => openCompleteModal(task)}
+                      disabled={isCrossedOut}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1e6641] hover:bg-[#165032] text-white shadow-xs transition-colors disabled:opacity-60"
+                    >
+                      <Check size={14} /> Mark Visit Done
+                    </button>
                   </div>
                 </div>
               );
@@ -622,11 +616,10 @@ export default function CareGaps() {
                 <button
                   type="button"
                   onClick={handleConfirmCompletion}
-                  disabled={completing}
-                  className="px-4 py-2 text-xs font-semibold bg-[#1e6641] hover:bg-[#165032] text-white rounded-xl shadow-xs transition-colors disabled:opacity-60 flex items-center gap-1.5"
+                  className="px-4 py-2 text-xs font-semibold bg-[#1e6641] hover:bg-[#165032] text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
                 >
                   <Check size={14} />
-                  {completing ? 'Saving...' : 'Confirm Completed'}
+                  Confirm Completed
                 </button>
               </div>
             </div>

@@ -11,6 +11,7 @@ import Patients from './pages/Patients';
 import PatientProfile from './pages/PatientProfile';
 import FacilityReadiness from './pages/FacilityReadiness';
 import Queue from './pages/Queue';
+import HealthGuidance from './pages/HealthGuidance';
 import {
   HeartPulse,
   LogOut,
@@ -21,6 +22,7 @@ import {
   UserPlus,
   RefreshCw,
   AlertTriangle,
+  BookOpen,
 } from 'lucide-react';
 
 // ─── Shared nav link component ───────────────────────────────────────────────
@@ -100,6 +102,7 @@ const ProtectedRoute = () => {
                 <NavLink to="/worker" exact><LayoutDashboard size={15} />Home & Tasks</NavLink>
                 <NavLink to="/patients"><Users size={15} />Community Members</NavLink>
                 <NavLink to="/followups"><AlertTriangle size={15} />Care Gap Alerts</NavLink>
+                <NavLink to="/guidance"><BookOpen size={15} />Health Guidance</NavLink>
               </>
             ) : isPatient ? (
               <>
@@ -245,6 +248,7 @@ export default function App() {
             <Route path="/intake"            element={<PatientIntakeFlow />} />
             <Route path="/referral-success"  element={<ReferralSuccess />} />
             <Route path="/followups"         element={<CareGaps />} />
+            <Route path="/guidance"          element={<HealthGuidance />} />
             <Route path="/patients"          element={<Patients />} />
             <Route path="/patients/:id"      element={<PatientProfile />} />
             <Route path="/queue"             element={<Queue />} />

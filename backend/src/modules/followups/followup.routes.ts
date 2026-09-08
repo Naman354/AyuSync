@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
-import { createCounterReferral, listFollowUps, completeFollowUp } from './followup.controller';
+import { createCounterReferral, listFollowUps, completeFollowUp, escalateFollowUp } from './followup.controller';
 
 const router = Router();
 
@@ -15,5 +15,8 @@ router.get('/', listFollowUps);
 
 // PATCH /api/followups/:id/complete — worker marks task as completed
 router.patch('/:id/complete', completeFollowUp);
+
+// PATCH /api/followups/:id/escalate — worker escalates task to Medical Officer
+router.patch('/:id/escalate', escalateFollowUp);
 
 export default router;

@@ -226,17 +226,28 @@ export default function PatientIntakeFlow() {
         });
       }
 
-      navigate('/referral-success', {
-        state: {
-          token,
-          patientName: cleanName || 'Community Patient',
-          urgency: assessment?.urgency || 'ROUTINE',
-          facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
-          symptoms,
-          needsAmbulance,
-          isOffline: true,
-        }
-      });
+      const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+      const referralPayload = {
+        token,
+        patientName: cleanName || 'Community Patient',
+        age: cleanAge,
+        gender: patient.gender,
+        phone: cleanPhone,
+        village: cleanVillage,
+        abhaId: cleanAbha,
+        urgency: assessment?.urgency || 'ROUTINE',
+        facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
+        originFacility: facilities[0]?.name || 'Khandala Sub-Center',
+        symptoms,
+        vitals,
+        reason: cleanReason || referralNotes || symptoms.join(', ') || 'General Clinical Referral',
+        needsAmbulance,
+        workerName: userObj.name || 'Sunita Patil (ASHA)',
+        assessmentScore: assessment?.score,
+        isOffline: true,
+      };
+
+      navigate('/referral-success', { state: referralPayload });
       setSubmitting(false);
       return;
     }
@@ -258,7 +269,7 @@ export default function PatientIntakeFlow() {
         // If network dropped mid-request, gracefully fallback to offline queue
         if (pErr.code === 'ERR_NETWORK' || !navigator.onLine) {
           const offlinePatId = `offline-pat-${Date.now()}`;
-          const offlinePat = { id: offlinePatId, name: cleanName, age: cleanAge, gender: patient.gender, village: cleanVillage, phone: cleanPhone };
+          const offlinePat = { id: offlinePatId, name: cleanName, age: cleanAge, gender: patient.gender, village: cleanVillage, phone: cleanPhone, abhaId: cleanAbha };
           saveLocalPatient(offlinePat);
           enqueueOfflineMutation({ entity: 'PATIENT', action: 'CREATE', payload: offlinePat });
           if (selectedFacility) {
@@ -268,8 +279,26 @@ export default function PatientIntakeFlow() {
               payload: { patientId: offlinePatId, destinationId: selectedFacility, urgency: assessment?.urgency || 'ROUTINE', reason: cleanReason }
             });
           }
+          const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
           navigate('/referral-success', {
-            state: { token, patientName: cleanName, urgency: assessment?.urgency || 'ROUTINE', facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC', symptoms, needsAmbulance, isOffline: true }
+            state: {
+              token,
+              patientName: cleanName,
+              age: cleanAge,
+              gender: patient.gender,
+              phone: cleanPhone,
+              village: cleanVillage,
+              abhaId: cleanAbha,
+              urgency: assessment?.urgency || 'ROUTINE',
+              facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
+              originFacility: facilities[0]?.name || 'Khandala Sub-Center',
+              symptoms,
+              vitals,
+              reason: cleanReason || referralNotes || symptoms.join(', ') || 'General Clinical Referral',
+              needsAmbulance,
+              workerName: userObj.name || 'Sunita Patil (ASHA)',
+              isOffline: true
+            }
           });
           return;
         }
@@ -293,14 +322,25 @@ export default function PatientIntakeFlow() {
         });
       }
 
+      const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
       navigate('/referral-success', {
         state: {
           token,
           patientName: cleanName,
+          age: cleanAge,
+          gender: patient.gender,
+          phone: cleanPhone,
+          village: cleanVillage,
+          abhaId: cleanAbha,
           urgency: assessment?.urgency || 'ROUTINE',
           facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
+          originFacility: facilities[0]?.name || 'Khandala Sub-Center',
           symptoms,
+          vitals,
+          reason: cleanReason || referralNotes || symptoms.join(', ') || 'General Clinical Referral',
           needsAmbulance,
+          workerName: userObj.name || 'Sunita Patil (ASHA)',
+          assessmentScore: assessment?.score,
           isOffline: false,
         }
       });
