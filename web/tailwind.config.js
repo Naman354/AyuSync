@@ -40,6 +40,36 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Exact SwasthyaSetu Figma Palette
+        ayugreen: {
+          DEFAULT: "#2d6e4a",
+          dark: "#1e4d33",
+          light: "#eaf2ec",
+          soft: "#3d855e",
+        },
+        ayutan: {
+          DEFAULT: "#cfb08d",
+          light: "#f7f2ea",
+          dark: "#b08f6b",
+        },
+        ayucream: {
+          DEFAULT: "#f4f3df",
+          light: "#fcfcf7",
+          dark: "#e6e8cc",
+        },
+        ayusage: {
+          DEFAULT: "#bdccd2",
+          light: "#eff3f4",
+          dark: "#8fa4ab",
+        },
+        ayuolive: {
+          DEFAULT: "#5e6e39",
+          light: "#eff2e8",
+        },
+        ayudark: "#1c3024",
+      },
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",

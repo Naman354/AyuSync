@@ -1,96 +1,153 @@
-# AyuSync: Rural Healthcare Orchestration Platform (SIH 2026)
+# AyuSync / SwasthyaSetu: Rural Healthcare Orchestration Platform (SIH 2026)
 
-AyuSync is a highly integrated, offline-first healthcare orchestration platform designed to bridge the gap between rural frontline healthcare workers (ASHA/ANM) and district-level specialist facilities.
+AyuSync (SwasthyaSetu) is an offline-first healthcare orchestration platform designed to bridge the gap between rural frontline healthcare workers (ASHA/ANM) and district-level specialist facilities across India.
+
+---
 
 ## 1. Project Overview
-AyuSync transforms fragmented healthcare delivery into a cohesive, closed-loop care journey. It ensures that rural patients receive timely assessments, intelligent triage, and guaranteed follow-ups through a robust state-machine driven architecture.
+AyuSync transforms fragmented rural healthcare delivery into a cohesive, closed-loop care journey. It ensures that rural patients receive timely community assessments, explainable AI triage, priority hospital scheduling, closed-loop counter-referrals, and guaranteed home follow-ups through a robust state-machine driven architecture.
 
 ## 2. Problem
-Rural healthcare suffers from disjointed systems, lack of connectivity, and manual follow-ups, leading to "leaky" care journeys where patients are lost between referral facilities.
+Rural healthcare suffers from disjointed systems, lack of persistent connectivity, and manual paper-based follow-ups, leading to "leaky" care journeys where vulnerable patients are lost in transition between village sub-centers and district hospitals.
 
 ## 3. Solution
-AyuSync provides an end-to-end connected ecosystem featuring offline-first mobile data collection, AI-driven triage, real-time facility dashboards, and automated care-gap detection to ensure zero patients are lost in transition.
+AyuSync provides an end-to-end connected ecosystem:
+- **Offline-first mobile data collection** for ASHA workers in remote villages.
+- **Explainable AI (XAI) clinical triage** identifying high-risk symptoms and vitals.
+- **Dynamic facility telemetry & readiness intelligence** to route referrals to available facilities.
+- **Real-time doctor consultation queue** with priority stratification.
+- **Closed-loop counter-referrals** where doctors send digital care instructions directly back to ASHA workers.
+- **Automated care-gap detection** ensuring zero patients are lost in transition.
+
+---
 
 ## 4. Architecture
-- **App (Mobile)**: Flutter offline-first application for ASHA workers using `sqflite` and `connectivity_plus` for intelligent background syncing.
-- **Web (Dashboard)**: React.js + TypeScript SPA with `Dexie.js` for offline queue management and WebSockets for real-time updates.
-- **Backend**: Node.js + Express + Socket.io + PostgreSQL (Prisma). Handles strict RBAC, data isolation, and state machine validation.
-- **AI Service**: Python FastAPI microservice utilizing heuristic/LLM models for explainable triage and intelligent facility routing.
 
-## 5. User Roles
-- **Worker (ASHA/ANM)**: Registers patients, conducts assessments offline, and manages follow-ups.
-- **Doctor / Specialist**: Views real-time queues, conducts consultations, and triggers counter-referrals.
-- **Facility Admin**: Monitors readiness, capacity, and analytics.
-
-## 6. Complete Feature List
-- ✅ Offline Patient Registration & Sync
-- ✅ Real-time Doctor Queue
-- ✅ Appointment Double-Booking Prevention
-- ✅ Explainable AI Triage
-- ✅ Intelligent Routing Engine
-- ✅ Referral State Machine
-- ✅ Automated Counter-Referrals
-- ✅ Care-Gap Detection (Background Jobs)
-- ✅ Role-Based Access Control
-- ✅ Automated Notifications
-
-## 7. AI Architecture
-The Python FastAPI service analyzes symptoms and vitals to generate a structured `TriageResponse` (Urgency, Reasons, Confidence, Missing Info). The Node.js backend features strict timeout-fallback logic to gracefully degrade if the AI service is unreachable.
-
-## 8. Agentic Architecture
-Future integrations will include controlled Agentic automation where agents observe care-gaps and autonomously draft follow-up tasks, requiring human-in-the-loop approval before execution.
-
-## 9. Offline Architecture
-Web uses `Dexie.js` and Mobile uses `sqflite` to persist data locally during network outages.
-
-## 10. Sync / Conflict Strategy
-Mutations are stored in a local `mutation_queue`. Upon regaining connectivity, batches are sent to `/api/sync`. The backend ensures idempotency via unique `operationId`s and handles conflicts using timestamp comparisons.
-
-## 11. Referral State Machine
-Enforces strict transitions: `CREATED` → `SUBMITTED` → `ACCEPTED` → `SCHEDULED` → `PATIENT_ARRIVED` → `IN_CONSULTATION` → `COUNTER_REFERRED`.
-
-## 12. Care-Gap Engine
-`node-cron` background jobs automatically scan for stuck referrals (>24h) and overdue follow-ups, escalating them into high-priority tasks and triggering notifications.
-
-## 13. Intelligent Routing
-Evaluates facilities based on required services, capacity (`OPEN` vs `OVERCAPACITY`), and computes a readiness score to recommend the optimal destination.
-
-## 14. Facility Readiness
-Admins can update capacity states (`OPEN`, `CLOSED`, `OVERCAPACITY`) and services, instantly affecting the routing engine's decisions.
-
-## 15. Interoperability
-Data models utilize standardized identifiers (`ExternalReference`) to enable future sandbox integration with government ABDM/FHIR systems.
-
-## 16. Security
-Secured via JWT Authentication, expressive Prisma-backed RBAC, and object-level data isolation.
-
-## 17. Testing
-Comprehensive E2E Regression Suite (`test_phase_g.js`) validating the entire lifecycle, including AI timeouts and queue state transitions.
-
-## 18. Setup & Environment Variables
-```env
-# .env (Backend)
-DATABASE_URL="postgresql://user:pass@localhost:5432/ayusync"
-JWT_SECRET="supersecret_ayusync_key_2026"
-AI_SERVICE_URL="http://localhost:8000"
-FRONTEND_URL="http://localhost:5173"
+```text
+[ASHA Worker / Mobile App]
+        │ (Offline-first / SQLite sync)
+        ▼
+[Central Backend API Gateway (Node.js/Express)] ◄──► [Explainable AI Microservice (FastAPI)]
+        │                                                     │
+        ├──────────────────────┬──────────────────────────────┘
+        ▼                      ▼
+[PostgreSQL Database]   [Real-time WebSockets]
+                               │
+                               ▼
+                    [Doctor & Clinic Dashboard (React.js)]
 ```
 
-## 19. Demo Flow (The Complete Journey)
-1. **Patient Registration** (Offline via App/Web).
-2. **Assessment** captured.
-3. **AI Triage** scores urgency.
-4. **Intelligent Routing** selects facility.
-5. **Appointment** booked safely.
-6. Patient appears on **Real-time Queue**.
-7. **Referral** created to District Hospital.
-8. **Counter-Referral** generated by specialist.
-9. **Follow-up** assigned to ASHA.
-10. **Care-Gap Engine** detects overdue task.
-11. **Task Completed**, Journey Closed.
+- **App (Mobile)**: Flutter offline-first application for ASHA workers using `sqflite` and `connectivity_plus` for intelligent background syncing.
+- **Web (Dashboard)**: React.js + TypeScript SPA with TailwindCSS, Lucide icons, responsive navigation, and WebSockets for real-time triage and queue telemetry.
+- **Backend**: Node.js + Express + Socket.io + PostgreSQL (Prisma ORM). Handles strict RBAC, data isolation, physiological validation, and referral state machines.
+- **AI Service**: Python FastAPI microservice utilizing heuristic and XAI models for explainable clinical triage and intelligent facility routing.
 
-## 20. SIH Innovation/Differentiation
-Unlike typical CRUD apps, AyuSync focuses on **Systemic Resilience**—operating flawlessly offline, recovering gracefully from AI outages, and mathematically guaranteeing no patient drops out of the referral loop.
+---
 
-## 21. Limitations & Future Scalability
-Currently, real-time push notifications use internal DB polling/WebSockets. Future iterations will integrate Firebase Cloud Messaging (FCM) and Multi-lingual voice transcription.
+## 5. User Roles
+
+1. **Doctor / Specialist**: Views real-time triage queues, conducts clinical consultations, reviews AI recommendations, and issues counter-referrals with follow-up instructions.
+2. **Worker (ASHA / ANM)**: Conducts community health visits, captures vitals, manages care-gap tasks, and receives counter-referral instructions.
+3. **Patient**: Accesses personal clinical health record timeline, diagnoses, prescriptions, and referral status.
+4. **Facility Admin**: Monitors real-time bed capacities, ICU availability, oxygen reserves, and district-wide telemetry.
+
+---
+
+## 6. Complete Feature List
+
+- ✅ **Offline-First Data Collection & Sync**: Captures vitals and assessments locally, syncs automatically on connectivity restoration.
+- ✅ **Rigorous Input Validation & Physiological Bounds**: Comprehensive client and server-side checks for BP, HR, SpO2, blood glucose, and demographics.
+- ✅ **Real-Time Doctor Queue**: Live queue with priority sorting (Routine, Priority, Urgent, Emergency).
+- ✅ **Explainable AI Clinical Triage**: Generates urgency scores with transparent clinical explanations and confidence metrics.
+- ✅ **Referral State Machine**: Enforces strict audit-logged transitions (`CREATED` → `SUBMITTED` → `ACCEPTED` → `SCHEDULED` → `PATIENT_ARRIVED` → `IN_CONSULTATION` → `COUNTER_REFERRED` → `COMPLETED`).
+- ✅ **Closed-Loop Counter-Referrals**: Downstream transmission of doctor prescriptions and home follow-up instructions to ASHA workers.
+- ✅ **Care-Gap Detection (Background Engine)**: Automated detection of overdue maternal visits, missed diabetic checkups, and stuck referrals.
+- ✅ **Facility Telemetry & Capacity Tracking**: Real-time visibility into ICU beds, general beds, and facility operational status (`OPEN` vs `OVERCAPACITY`).
+- ✅ **Role-Based Access Control (RBAC)**: Fine-grained permissions for Doctors, Workers, and Patients.
+
+---
+
+## 7. Demo Accounts & Credentials
+
+The platform is pre-seeded with realistic, interconnected healthcare profiles situated in **Maharashtra (Pune District: Baramati – Khandala – Saswad – Junnar – Aundh)**.
+
+> **Universal Demo Password:** `password123`
+
+### 👨‍⚕️ Doctors & Specialists
+| Role | Name | Facility | Mobile Number | Password |
+|---|---|---|---|---|
+| **Doctor (CMO)** | Dr. Rajesh Deshmukh | Baramati Sub-District Hospital & CHC | `+919876543210` | `password123` |
+| **Specialist (OBGYN)** | Dr. Priya Kulkarni | Baramati CHC & Aundh District Hospital | `+919876543211` | `password123` |
+| **Pediatrician** | Dr. Anand Joshi | Junnar Rural Hospital & Trauma Centre | `+919876543212` | `password123` |
+
+### 👩‍💼 Frontline Health Workers (ASHA & ANM)
+| Role | Name | Area / Sub-Center | Mobile Number | Password |
+|---|---|---|---|---|
+| **Senior ASHA Worker** | Sunita Patil | Khandala Sub-Center | `+919998887776` | `password123` |
+| **ASHA Worker** | Vandana Shinde | Saswad Sector | `+919998887777` | `password123` |
+| **ANM Nurse** | Kavita More | Baramati Sector | `+919998887778` | `password123` |
+
+### 🧑 Patients (Direct Health Record Timeline)
+| Role | Name | Clinical Profile | Mobile Number | Password |
+|---|---|---|---|---|
+| **Patient (Chronic Care)** | Ramesh Kulkarni | Essential Hypertension & Type 2 Diabetes | `+919111222333` | `password123` |
+| **Patient (Maternal Care)** | Pooja Sharma | High-Risk Pregnancy (Gestational Hypertension) | `+919111222334` | `password123` |
+| **Patient (Acute Referral)** | Aniket Gaikwad | Acute Gastroenteritis & Dehydration | `+919111222335` | `password123` |
+
+---
+
+## 8. Setup & Environment Configuration
+
+### Backend Environment Variables (`backend/.env`)
+```env
+PORT=5000
+NODE_ENV=development
+DATABASE_URL="postgresql://user:password@hostname:5432/dbname"
+DIRECT_URL="postgresql://user:password@hostname:5432/dbname"
+JWT_SECRET="your-jwt-secret-key"
+CORS_ORIGINS="http://localhost:5173,http://localhost:3000"
+AI_SERVICE_URL="http://localhost:8000"
+```
+
+### Frontend Environment Variables (`web/.env`)
+```env
+# Point to your API gateway (or leave blank for relative proxy in development)
+VITE_API_URL=http://localhost:5000
+```
+*(In production, set `VITE_API_URL` in your hosting dashboard such as Vercel. Do not commit `.env` files containing production URLs or secrets to version control).*
+
+---
+
+## 9. Running Locally
+
+### 1. Backend
+```bash
+cd backend
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run seed     # Seeds realistic Maharashtra healthcare network
+npm run dev      # Runs Express + Socket.io server on http://localhost:5000
+```
+
+### 2. Web Frontend
+```bash
+cd web
+npm install
+npm run dev      # Launches Vite dev server on http://localhost:5173
+```
+
+### 3. AI Microservice (Optional)
+```bash
+cd ai-service
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+---
+
+## 10. SIH 2026 Innovation & Systemic Resilience
+
+1. **Deterministic Closed Loop**: Unlike standard telemedicine apps that end when a referral is sent, AyuSync tracks the patient back to the community via digital counter-referrals.
+2. **Graceful AI Degradation**: If the AI triage service is unreachable or experiences network lag, the backend gracefully falls back to clinical rule-based triage without dropping requests.
+3. **Offline Integrity**: ASHA workers in connectivity shadow zones can record complete patient assessments without loss of data.

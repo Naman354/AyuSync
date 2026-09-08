@@ -9,13 +9,47 @@ export const enqueuePatient = async (req: Request, res: Response) => {
 
     let finalApptId = appointmentId;
 
-    // Create a walk-in appointment if only patientId is provided
+    let targetPatientId = patientId;
+    if (!targetPatientId && appointmentId) {
+      const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+      targetPatientId = appt?.patientId;
+    }
+
+    // Prevent duplicate active queue entries for the same patient
+    if (targetPatientId) {
+      const existingActiveEntry = await prisma.queueEntry.findFirst({
+        where: {
+          appointment: { patientId: targetPatientId },
+          status: { in: ['WAITING', 'IN_CONSULTATION', 'PRIORITY'] }
+        }
+      });
+      if (existingActiveEntry) {
+        return res.status(400).json({
+          error: 'Patient Already in Queue',
+          message: 'This patient is already waiting or in consultation in the queue.'
+        });
+      }
+    }
+
+    // Validate entities if creating a walk-in appointment
     if (!finalApptId && patientId && facilityId) {
+      const [patientExists, facilityExists] = await Promise.all([
+        prisma.patient.findUnique({ where: { id: patientId } }),
+        prisma.facility.findUnique({ where: { id: facilityId } })
+      ]);
+
+      if (!patientExists) {
+        return res.status(404).json({ error: 'Not Found', message: 'Patient not found' });
+      }
+      if (!facilityExists) {
+        return res.status(404).json({ error: 'Not Found', message: 'Facility not found' });
+      }
+
       const walkIn = await prisma.appointment.create({
         data: {
           patientId,
           facilityId,
-          doctorId,
+          doctorId: doctorId || null,
           scheduledAt: new Date(),
           status: 'BOOKED'
         }
@@ -27,23 +61,29 @@ export const enqueuePatient = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Bad Request', message: 'appointmentId or patientId+facilityId is required' });
     }
 
+    const cleanPriority = Math.max(0, Math.min(100, parseInt(String(priority ?? 0), 10) || 0));
+
     const queueEntry = await prisma.queueEntry.create({
       data: {
         appointmentId: finalApptId,
-        doctorId,
-        priority: priority ? parseInt(priority) : 0,
+        doctorId: doctorId || null,
+        priority: cleanPriority,
         status: 'WAITING'
       },
       include: {
-        appointment: true
+        appointment: { include: { patient: true } }
       }
     });
 
-    if (queueEntry.appointment?.facilityId) {
-      broadcastQueueUpdate(queueEntry.appointment.facilityId, doctorId, {
-        action: 'ENQUEUE',
-        entry: queueEntry
-      });
+    try {
+      if (queueEntry.appointment?.facilityId) {
+        broadcastQueueUpdate(queueEntry.appointment.facilityId, doctorId, {
+          action: 'ENQUEUE',
+          entry: queueEntry
+        });
+      }
+    } catch (sockErr) {
+      console.warn('[Queue] Socket broadcast warning on enqueue:', sockErr);
     }
 
     res.status(201).json(queueEntry);
@@ -85,6 +125,10 @@ export const updateQueueStatus = async (req: Request, res: Response) => {
 
     const currentStatus = queueEntry.status;
 
+    if (currentStatus === status) {
+      return res.json(queueEntry);
+    }
+
     // Define allowed transitions
     const VALID_QUEUE_TRANSITIONS: Record<string, string[]> = {
       'WAITING': ['IN_CONSULTATION', 'CANCELLED'],
@@ -100,18 +144,23 @@ export const updateQueueStatus = async (req: Request, res: Response) => {
     const updated = await prisma.queueEntry.update({
       where: { id },
       data: { status },
-      include: { appointment: true }
+      include: { appointment: { include: { patient: true } } }
     });
 
-    if (updated.appointment?.facilityId) {
-      broadcastQueueUpdate(updated.appointment.facilityId, updated.doctorId, {
-        action: 'UPDATE_STATUS',
-        entry: updated
-      });
+    try {
+      if (updated.appointment?.facilityId) {
+        broadcastQueueUpdate(updated.appointment.facilityId, updated.doctorId, {
+          action: 'UPDATE_STATUS',
+          entry: updated
+        });
+      }
+    } catch (sockErr) {
+      console.warn('[Queue] Socket broadcast warning on status update:', sockErr);
     }
 
     res.json(updated);
   } catch (error) {
+    console.error('[Queue] updateQueueStatus error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };

@@ -41,7 +41,7 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('13 Worker Confirmation'),
+        title: const Text('Confirm Urgency & Recommendation'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -51,12 +51,12 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Human-in-the-Loop Clinical Review',
+              'Health Worker Verification',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             const Text(
-              'As an ASHA/ANM health worker, confirm or override the AI triage recommendation based on your direct in-person evaluation.',
+              'As an ASHA worker, confirm or adjust the suggested urgency level based on your in-person checkup.',
               style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 20),
@@ -75,7 +75,7 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'AI Triage Suggestion: ${triage?.urgencyLevel ?? "PRIORITY"} (Score: ${triage?.urgencyScore ?? 50}/100)',
+                      'System Suggested Urgency: ${triage?.urgencyLevel ?? "PRIORITY"} (Score: ${triage?.urgencyScore ?? 50}/100)',
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A)),
                     ),
                   ),
@@ -118,7 +118,7 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
               controller: _workerNotesController,
               maxLines: 3,
               decoration: const InputDecoration(
-                labelText: 'Worker Clinical Remarks & Decision Rationale',
+                labelText: 'Your Notes & Reason for Decision',
                 hintText: 'Enter clinical observations or justification for override...',
                 prefixIcon: Icon(Icons.edit_note),
                 border: OutlineInputBorder(),
@@ -136,9 +136,13 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
               ),
               onPressed: _handleConfirm,
               icon: const Icon(Icons.local_hospital_outlined),
-              label: const Text(
-                'Confirm & Proceed to 14 Smart Facility Routing',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              label: const Flexible(
+                child: Text(
+                  'Confirm & Choose Health Center',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
           ],
@@ -156,7 +160,7 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
     final isSelected = _selectedUrgency == value;
     return Card(
       elevation: 0,
-      color: isSelected ? color.withOpacity(0.06) : Colors.white,
+      color: isSelected ? color.withValues(alpha: 0.06) : Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
         side: BorderSide(
@@ -171,15 +175,30 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
           padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
           child: Row(
             children: [
-              Radio<String>(
-                value: value,
-                groupValue: _selectedUrgency,
-                activeColor: color,
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedUrgency = val);
-                },
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected ? color : Colors.grey.shade400,
+                    width: 2,
+                  ),
+                ),
+                child: isSelected
+                    ? Center(
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: color,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +208,7 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: isSelected ? color.shade900 : Colors.black87,
+                        color: isSelected ? color : Colors.black87,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -206,8 +225,4 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
       ),
     );
   }
-}
-
-extension ColorShade on Color {
-  Color get shade900 => this;
 }

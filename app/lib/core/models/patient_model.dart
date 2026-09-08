@@ -72,30 +72,46 @@ class Patient {
   }
 
   factory Patient.fromMap(Map<String, dynamic> map) {
+    // Extract ABHA from nested identifiers array if present
+    String? resolvedAbha = map['abhaId'] != '' ? map['abhaId'] : null;
+    if (resolvedAbha == null && map['identifiers'] is List) {
+      for (var ident in (map['identifiers'] as List)) {
+        if (ident is Map && ident['type'] == 'ABHA' && ident['value'] != null) {
+          resolvedAbha = ident['value'].toString();
+          break;
+        }
+      }
+    }
+
+    String genderStr = map['gender']?.toString() ?? 'Other';
+    if (genderStr == 'MALE') genderStr = 'Male';
+    if (genderStr == 'FEMALE') genderStr = 'Female';
+    if (genderStr == 'OTHER') genderStr = 'Other';
+
     return Patient(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      age: map['age'] is int ? map['age'] : int.tryParse(map['age'].toString()) ?? 0,
-      gender: map['gender'] ?? 'Other',
-      phone: map['phone'] ?? '',
-      village: map['village'] ?? '',
-      abhaId: map['abhaId'] != '' ? map['abhaId'] : null,
-      bloodGroup: map['bloodGroup'] != '' ? map['bloodGroup'] : null,
-      dob: map['dob'] != '' ? map['dob'] : null,
-      emergencyContact: map['emergencyContact'] != '' ? map['emergencyContact'] : null,
-      preferredLanguage: map['preferredLanguage'] != '' ? map['preferredLanguage'] : null,
-      district: map['district'] != '' ? map['district'] : null,
-      state: map['state'] != '' ? map['state'] : null,
-      pinCode: map['pinCode'] != '' ? map['pinCode'] : null,
-      address: map['address'] != '' ? map['address'] : null,
-      allergies: map['allergies'] != '' ? map['allergies'] : null,
-      existingConditions: map['existingConditions'] != '' ? map['existingConditions'] : null,
-      currentMedications: map['currentMedications'] != '' ? map['currentMedications'] : null,
-      pastHistory: map['pastHistory'] != '' ? map['pastHistory'] : null,
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? '',
+      age: map['age'] is int ? map['age'] : int.tryParse(map['age']?.toString() ?? '0') ?? 0,
+      gender: genderStr,
+      phone: map['phone']?.toString() ?? '',
+      village: map['village']?.toString() ?? '',
+      abhaId: resolvedAbha,
+      bloodGroup: (map['bloodGroup'] != null && map['bloodGroup'] != '') ? map['bloodGroup'].toString() : null,
+      dob: (map['dob'] != null && map['dob'] != '') ? map['dob'].toString() : null,
+      emergencyContact: (map['emergencyContact'] != null && map['emergencyContact'] != '') ? map['emergencyContact'].toString() : null,
+      preferredLanguage: (map['preferredLanguage'] != null && map['preferredLanguage'] != '') ? map['preferredLanguage'].toString() : null,
+      district: (map['district'] != null && map['district'] != '') ? map['district'].toString() : null,
+      state: (map['state'] != null && map['state'] != '') ? map['state'].toString() : null,
+      pinCode: (map['pinCode'] != null && map['pinCode'] != '') ? map['pinCode'].toString() : null,
+      address: (map['address'] != null && map['address'] != '') ? map['address'].toString() : null,
+      allergies: (map['allergies'] != null && map['allergies'] != '') ? map['allergies'].toString() : null,
+      existingConditions: (map['existingConditions'] != null && map['existingConditions'] != '') ? map['existingConditions'].toString() : null,
+      currentMedications: (map['currentMedications'] != null && map['currentMedications'] != '') ? map['currentMedications'].toString() : null,
+      pastHistory: (map['pastHistory'] != null && map['pastHistory'] != '') ? map['pastHistory'].toString() : null,
       createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt']) ?? DateTime.now()
+          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
           : DateTime.now(),
-      isSynced: map['isSynced'] == 1 || map['isSynced'] == true,
+      isSynced: map['isSynced'] == null ? true : (map['isSynced'] == 1 || map['isSynced'] == true),
     );
   }
 

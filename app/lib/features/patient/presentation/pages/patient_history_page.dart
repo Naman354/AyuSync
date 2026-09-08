@@ -2,8 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 
-class PatientHistoryPage extends StatelessWidget {
+class PatientHistoryPage extends StatefulWidget {
   const PatientHistoryPage({super.key});
+
+  @override
+  State<PatientHistoryPage> createState() => _PatientHistoryPageState();
+}
+
+class _PatientHistoryPageState extends State<PatientHistoryPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final patient = appState.currentPatient ?? (appState.patients.isNotEmpty ? appState.patients.first : null);
+      if (patient != null) {
+        appState.fetchPatientTimeline(patient.id);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +39,7 @@ class PatientHistoryPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('16 Patient History'),
+        title: const Text('Patient Visit History'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -69,7 +86,7 @@ class PatientHistoryPage extends StatelessWidget {
                 const Icon(Icons.history, size: 18, color: Color(0xFF1E293B)),
                 const SizedBox(width: 6),
                 const Text(
-                  'Longitudinal Clinical Encounters',
+                  'Past Visits & Checkup Records',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                 ),
                 const Spacer(),
@@ -87,9 +104,9 @@ class PatientHistoryPage extends StatelessWidget {
                       children: [
                         Icon(Icons.assignment_late_outlined, size: 56, color: Colors.grey.shade400),
                         const SizedBox(height: 12),
-                        const Text('No prior assessment records for this citizen.'),
+                        const Text('No past checkup records for this patient.'),
                         const SizedBox(height: 4),
-                        const Text('Start a fresh triage session below.', style: TextStyle(color: Colors.grey)),
+                        const Text('Start a new health checkup below.', style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                   )
@@ -186,7 +203,7 @@ class PatientHistoryPage extends StatelessWidget {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),
@@ -205,7 +222,7 @@ class PatientHistoryPage extends StatelessWidget {
               },
               icon: const Icon(Icons.add_chart),
               label: const Text(
-                'Start New 08 Symptoms + Vitals Assessment',
+                'Start New Health Checkup',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),

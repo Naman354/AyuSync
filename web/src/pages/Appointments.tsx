@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { Button } from '../components/ui/Button';
+import InlineError from '../components/ui/InlineError';
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -20,6 +21,8 @@ export default function Appointments() {
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [selectedFacility, setSelectedFacility] = useState('');
   const [bookingTime, setBookingTime] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [modalError, setModalError] = useState('');
 
   const fetchAppointments = async () => {
     try {
@@ -34,19 +37,41 @@ export default function Appointments() {
     }
   };
 
+  const openBookingModal = () => {
+    setShowBookingForm(true);
+    if (patients.length === 0) api.get('/patients/search?q=').then(res => setPatients(res.data)).catch(console.error);
+    if (doctors.length === 0) api.get('/auth/doctors').then(res => setDoctors(res.data)).catch(console.error);
+    if (facilities.length === 0) api.get('/facilities').then(res => setFacilities(res.data.data || res.data || [])).catch(console.error);
+  };
+
   useEffect(() => {
     fetchAppointments();
-    // Fetch dependencies for booking form
-    api.get('/patients/search?q=').then(res => setPatients(res.data)).catch(console.error);
-    api.get('/auth/doctors').then(res => setDoctors(res.data)).catch(console.error);
-    api.get('/facilities').then(res => setFacilities(res.data)).catch(console.error);
   }, []);
 
-  const handleBook = async () => {
-    if (!selectedPatient || !selectedDoctor || !selectedFacility || !date || !bookingTime) {
-      alert('All fields are required');
-      return;
+  const validateBooking = () => {
+    const errors: Record<string, string> = {};
+    if (!selectedPatient) errors.selectedPatient = 'Please select a patient.';
+    if (!selectedDoctor) errors.selectedDoctor = 'Please select a doctor.';
+    if (!selectedFacility) errors.selectedFacility = 'Please select a facility.';
+    if (!date) errors.date = 'Date is required.';
+    if (!bookingTime) errors.bookingTime = 'Time is required.';
+
+    if (date && bookingTime) {
+      const scheduledDate = new Date(`${date}T${bookingTime}:00`);
+      if (isNaN(scheduledDate.getTime())) {
+        errors.bookingTime = 'Please provide a valid time.';
+      } else if (scheduledDate.getTime() < Date.now() - 5 * 60 * 1000) {
+        errors.bookingTime = 'Appointment cannot be in the past.';
+      }
     }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleBook = async () => {
+    setModalError('');
+    if (!validateBooking()) return;
 
     setBookingLoading(true);
     try {
@@ -62,9 +87,10 @@ export default function Appointments() {
       setSelectedDoctor('');
       setSelectedFacility('');
       setBookingTime('');
+      setFieldErrors({});
       await fetchAppointments();
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || 'Failed to book slot');
+      setModalError(err.response?.data?.error || err.response?.data?.message || 'Failed to book slot.');
     } finally {
       setBookingLoading(false);
     }
@@ -87,50 +113,98 @@ export default function Appointments() {
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
-          <Button onClick={() => setShowBookingForm(true)}>Book Slot</Button>
+          <Button onClick={openBookingModal}>Book Slot</Button>
         </div>
       </div>
 
       {showBookingForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg w-full max-w-md">
-            <h3 className="text-xl font-bold mb-4">Book Appointment</h3>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border border-gray-100">
+            <h3 className="text-xl font-bold mb-4 text-gray-900">Book Appointment</h3>
+            {modalError && (
+              <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+                {modalError}
+              </div>
+            )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Patient</label>
-                <select className="w-full border p-2 rounded-md" value={selectedPatient} onChange={e => setSelectedPatient(e.target.value)}>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Patient *</label>
+                <select
+                  className={`w-full border p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#1e6641] focus:outline-none bg-white ${
+                    fieldErrors.selectedPatient ? 'border-red-400 focus:ring-red-400' : 'border-gray-200'
+                  }`}
+                  value={selectedPatient}
+                  onChange={e => {
+                    setSelectedPatient(e.target.value);
+                    if (fieldErrors.selectedPatient) setFieldErrors(prev => ({ ...prev, selectedPatient: '' }));
+                  }}
+                >
                   <option value="">Select Patient</option>
                   {patients.map(p => <option key={p.id} value={p.id}>{p.name} (ID: {p.id.slice(0,6)})</option>)}
                 </select>
+                {fieldErrors.selectedPatient && <p className="text-xs text-red-500 mt-1">{fieldErrors.selectedPatient}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Doctor</label>
-                <select className="w-full border p-2 rounded-md" value={selectedDoctor} onChange={e => setSelectedDoctor(e.target.value)}>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Doctor *</label>
+                <select
+                  className={`w-full border p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#1e6641] focus:outline-none bg-white ${
+                    fieldErrors.selectedDoctor ? 'border-red-400 focus:ring-red-400' : 'border-gray-200'
+                  }`}
+                  value={selectedDoctor}
+                  onChange={e => {
+                    setSelectedDoctor(e.target.value);
+                    if (fieldErrors.selectedDoctor) setFieldErrors(prev => ({ ...prev, selectedDoctor: '' }));
+                  }}
+                >
                   <option value="">Select Doctor</option>
                   {doctors.map(d => <option key={d.id} value={d.id}>{d.user?.phone || 'Doctor'} (ID: {d.id.slice(0,6)})</option>)}
                 </select>
+                {fieldErrors.selectedDoctor && <p className="text-xs text-red-500 mt-1">{fieldErrors.selectedDoctor}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Facility</label>
-                <select className="w-full border p-2 rounded-md" value={selectedFacility} onChange={e => setSelectedFacility(e.target.value)}>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Facility *</label>
+                <select
+                  className={`w-full border p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#1e6641] focus:outline-none bg-white ${
+                    fieldErrors.selectedFacility ? 'border-red-400 focus:ring-red-400' : 'border-gray-200'
+                  }`}
+                  value={selectedFacility}
+                  onChange={e => {
+                    setSelectedFacility(e.target.value);
+                    if (fieldErrors.selectedFacility) setFieldErrors(prev => ({ ...prev, selectedFacility: '' }));
+                  }}
+                >
                   <option value="">Select Facility</option>
                   {facilities.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
+                {fieldErrors.selectedFacility && <p className="text-xs text-red-500 mt-1">{fieldErrors.selectedFacility}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                <input type="time" className="w-full border p-2 rounded-md" value={bookingTime} onChange={e => setBookingTime(e.target.value)} />
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Time *</label>
+                <input
+                  type="time"
+                  className={`w-full border p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#1e6641] focus:outline-none bg-white ${
+                    fieldErrors.bookingTime ? 'border-red-400 focus:ring-red-400' : 'border-gray-200'
+                  }`}
+                  value={bookingTime}
+                  onChange={e => {
+                    setBookingTime(e.target.value);
+                    if (fieldErrors.bookingTime) setFieldErrors(prev => ({ ...prev, bookingTime: '' }));
+                  }}
+                />
+                {fieldErrors.bookingTime && <p className="text-xs text-red-500 mt-1">{fieldErrors.bookingTime}</p>}
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowBookingForm(false)}>Cancel</Button>
-              <Button onClick={handleBook} disabled={bookingLoading}>{bookingLoading ? 'Booking...' : 'Book Appointment'}</Button>
+              <Button variant="outline" onClick={() => { setShowBookingForm(false); setFieldErrors({}); setModalError(''); }}>Cancel</Button>
+              <Button onClick={handleBook} disabled={bookingLoading} className="bg-[#1e6641] hover:bg-[#165032] text-white">
+                {bookingLoading ? 'Booking...' : 'Book Appointment'}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {error && <div className="bg-red-50 text-red-600 p-4 rounded-md mb-6">{error}</div>}
+      {error && <InlineError message={error} onDismiss={() => setError('')} />}
 
       {loading ? (
         <div className="text-gray-500 animate-pulse">Loading appointments...</div>

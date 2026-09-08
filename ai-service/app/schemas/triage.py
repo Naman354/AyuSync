@@ -7,9 +7,11 @@ class SymptomInfo(BaseModel):
     severity: Optional[str]
 
 class VitalInfo(BaseModel):
-    temperature: Optional[float]
-    blood_pressure: Optional[str]
-    heart_rate: Optional[int]
+    temperature: Optional[float] = None
+    blood_pressure: Optional[str] = None
+    heart_rate: Optional[int] = None
+    spo2: Optional[float] = None           # Oxygen saturation (%)
+    respiratory_rate: Optional[int] = None # Breaths per minute
 
 class TriageRequest(BaseModel):
     patientId: str
@@ -20,12 +22,13 @@ class TriageRequest(BaseModel):
     history: Optional[str]
 
 class TriageResponse(BaseModel):
-    urgency: str # ROUTINE, PRIORITY, URGENT
-    confidence: float
-    reasons: List[str]
-    risk_factors: List[str]
-    missing_information: List[str]
+    urgency: str                  # ROUTINE | PRIORITY | URGENT
+    confidence: float             # 0.0 – 1.0
+    reasons: List[str]            # Human-readable trigger descriptions
+    risk_factors: List[str]       # Demographic / chronic risk flags
+    missing_information: List[str] # What was absent from the input
     recommended_next_action: str
     escalation_required: bool
-    provenance: str
-    model_version: str
+    provenance: str               # Engine description
+    model_version: str            # Service version
+    rule_version: str             # Clinical rule-set version

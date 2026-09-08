@@ -11,7 +11,12 @@ export const bookAppointment = async (req: Request, res: Response) => {
 
     const parsedDate = new Date(scheduledAt);
     if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({ error: 'Bad Request', message: 'Invalid scheduledAt date' });
+      return res.status(400).json({ error: 'Bad Request', message: 'Invalid scheduledAt date format' });
+    }
+
+    const nowMinus24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (parsedDate < nowMinus24h) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Appointment cannot be scheduled in the past' });
     }
 
     // 1. Validate entities exist
@@ -21,9 +26,9 @@ export const bookAppointment = async (req: Request, res: Response) => {
       prisma.facility.findUnique({ where: { id: facilityId }, include: { availability: true } })
     ]);
 
-    if (!patient) return res.status(400).json({ error: 'Bad Request', message: 'Patient not found' });
-    if (!doctor) return res.status(400).json({ error: 'Bad Request', message: 'Doctor not found' });
-    if (!facility) return res.status(400).json({ error: 'Bad Request', message: 'Facility not found' });
+    if (!patient) return res.status(404).json({ error: 'Not Found', message: 'Patient not found' });
+    if (!doctor) return res.status(404).json({ error: 'Not Found', message: 'Doctor not found' });
+    if (!facility) return res.status(404).json({ error: 'Not Found', message: 'Facility not found' });
 
     // 2. Check facility availability
     if (facility.availability && facility.availability.status === 'CLOSED') {

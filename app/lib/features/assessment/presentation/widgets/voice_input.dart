@@ -34,13 +34,14 @@ class _VernacularVoiceInputState extends State<VernacularVoiceInput> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: AppColors.sageBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFC7DEC8)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButton<String>(
             value: _currentLanguage,
@@ -57,7 +58,7 @@ class _VernacularVoiceInputState extends State<VernacularVoiceInput> {
               if (val != null) setState(() => _currentLanguage = val);
             },
           ),
-          const Spacer(),
+          const SizedBox(width: 6),
           Text(
             _isListening ? 'Listening...' : 'Voice Input',
             style: TextStyle(
@@ -66,17 +67,17 @@ class _VernacularVoiceInputState extends State<VernacularVoiceInput> {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           InkWell(
             onTap: _toggleListening,
             borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: _isListening ? Colors.red : AppColors.forest,
               ),
-              child: Icon(_isListening ? Icons.stop_rounded : Icons.mic_rounded, color: Colors.white, size: 16),
+              child: Icon(_isListening ? Icons.stop_rounded : Icons.mic_rounded, color: Colors.white, size: 14),
             ),
           ),
         ],

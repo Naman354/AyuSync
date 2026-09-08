@@ -15,7 +15,7 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
 
     if (currentTask == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('17 Follow-up Task Details')),
+        appBar: AppBar(title: const Text('Follow-Up Task Details')),
         body: const Center(child: Text('No follow-up task found')),
       );
     }
@@ -26,7 +26,7 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('17 Follow-up Task Details'),
+        title: const Text('Follow-Up Task Details'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -88,7 +88,7 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Patient Target', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    const Text('Patient Details', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Text(currentTask.patientName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
@@ -112,7 +112,7 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Doctor Instructions', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    const Text('Doctor\'s Advice & Instructions', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Text(currentTask.taskDescription, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -150,7 +150,7 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Prescribed Medication Regimen', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                    const Text('Prescribed Medicines', style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     ...currentTask.prescribedMedicines.map(
                       (med) => Padding(
@@ -188,7 +188,7 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                 },
                 icon: const Icon(Icons.edit_calendar),
                 label: const Text(
-                  'Proceed to 18 Record Follow-up Visit',
+                  'Record Follow-Up Visit',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               )

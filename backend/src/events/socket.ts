@@ -25,6 +25,12 @@ export const initSocket = (server: any) => {
       socket.join(`facility_${facilityId}`);
     });
 
+    socket.on('join:worker', (workerId: string) => {
+      // ASHA workers subscribe to their personal task room
+      socket.join(`worker_${workerId}`);
+      console.log(`[Socket] Worker ${workerId} joined their room.`);
+    });
+
     socket.on('disconnect', () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`);
     });
@@ -51,4 +57,9 @@ export const broadcastQueueUpdate = (facilityId: string, doctorId: string | null
   if (doctorId) {
     getIO().to(`doctor_${doctorId}`).emit('queue.updated', payload);
   }
+};
+
+// Helper for broadcasting counter-referral tasks to a worker's dashboard
+export const broadcastCounterReferral = (workerId: string, payload: any) => {
+  getIO().to(`worker_${workerId}`).emit('counter_referral:created', payload);
 };

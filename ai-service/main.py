@@ -1,10 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import time
 import random
 
 app = FastAPI(title="AyuSync AI Service", version="1.0.0")
+
+@app.middleware("http")
+async def correlation_middleware(request: Request, call_next):
+    corr_id = request.headers.get("x-correlation-id")
+    response = await call_next(request)
+    if corr_id:
+        response.headers["x-correlation-id"] = corr_id
+    return response
 
 # --- Schemas ---
 

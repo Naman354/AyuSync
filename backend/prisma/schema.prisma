@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // -------------------------------------
@@ -153,6 +154,7 @@ model Patient {
   conditions  Condition[]
   referrals   Referral[]
   appointments Appointment[]
+  followUps   FollowUp[]
 }
 
 model PatientIdentifier {
@@ -347,14 +349,18 @@ model CounterReferral {
 }
 
 model FollowUp {
-  id         String   @id @default(uuid())
-  workerId   String?
-  worker     Worker?  @relation(fields: [workerId], references: [id])
-  patientId  String
-  
-  dueDate    DateTime
-  reason     String
-  status     String   // PENDING, COMPLETED, OVERDUE
+  id          String    @id @default(uuid())
+  workerId    String?
+  worker      Worker?   @relation(fields: [workerId], references: [id])
+  patientId   String
+  patient     Patient   @relation(fields: [patientId], references: [id])
+
+  dueDate     DateTime
+  reason      String
+  notes       String?   // Medications and additional doctor instructions
+  status      String    // PENDING, COMPLETED, OVERDUE
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
 }
 
 model Task {
