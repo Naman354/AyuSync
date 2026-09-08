@@ -463,7 +463,8 @@ async function main() {
       abhaId: '91-8844-3321-0001',
       conditions: [
         { name: 'Essential Hypertension', status: 'ACTIVE', diagnosedAt: d(-180) },
-        { name: 'Type 2 Diabetes Mellitus', status: 'ACTIVE', diagnosedAt: d(-120) }
+        { name: 'Type 2 Diabetes Mellitus', status: 'ACTIVE', diagnosedAt: d(-120) },
+        { name: 'Acute Bronchitis', status: 'RESOLVED', diagnosedAt: d(-240) }
       ]
     },
     // 2. Pooja Sharma (Pregnant mother, Gestational Hypertension, Counter-referred)
@@ -926,6 +927,34 @@ async function main() {
           treatment: 'Tab Metformin 500mg BD after meals, Tab Telmisartan 40mg OD morning',
           instructions: 'ASHA worker to confirm Metformin 500mg BD compliance & check fasting sugar. Advise low sodium diet and 30-minute daily brisk walking.',
           requiresFollowUp: true
+        }
+      }
+    }
+  });
+
+  // Past Referral for Ramesh Kulkarni (Completed Annual NCD Screening & ECG 4 months ago)
+  const refRameshPast = await prisma.referral.create({
+    data: {
+      id: 'ref-ramesh-kulkarni-past',
+      patientId: 'pat-ramesh-kulkarni',
+      originId: facKhandalaPhc.id,
+      destinationId: facKhandalaPhc.id,
+      reason: 'Annual Comprehensive NCD Screening & Baseline Cardiovascular Assessment',
+      urgency: 'ROUTINE',
+      status: 'COMPLETED',
+      createdAt: d(-120),
+      events: {
+        create: [
+          { statusFrom: null, statusTo: 'CREATED', notes: 'Scheduled annual non-communicable disease workup', createdAt: d(-120) },
+          { statusFrom: 'CREATED', statusTo: 'COMPLETED', notes: 'Consultation and baseline screening completed at Khandala PHC', createdAt: d(-119) }
+        ]
+      },
+      counterReferral: {
+        create: {
+          outcome: 'Baseline ECG within normal limits. Fasting glucose slightly elevated (134 mg/dL). Lifestyle counseling initiated.',
+          treatment: 'Dietary sodium reduction (< 5g/day), brisk walking 30 mins daily. Repeat blood sugar after 3 months.',
+          instructions: 'Follow up with ASHA worker for monthly blood pressure and dietary compliance monitoring.',
+          requiresFollowUp: false
         }
       }
     }
