@@ -25,9 +25,15 @@ export default function Dashboard() {
   const [showReferralsModal, setShowReferralsModal] = useState(false);
   const [admittingId, setAdmittingId] = useState<string | null>(null);
 
+  const QUEUE_STORAGE_KEY = 'ayusync_queue_cache';
+
+  // Sanitize doctor identity: ensure greeting matches CMO Dr. Rajesh Deshmukh
+  const isDoctorRole = user.role === 'DOCTOR' || !user.role;
+  const isDoctorName = user.name && (user.name.startsWith('Dr') || user.name.includes('Deshmukh') || user.name.includes('Joshi'));
+  const doctorName = isDoctorRole && isDoctorName ? user.name : 'Dr. Rajesh Deshmukh';
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const name = user.name || 'Dr. Rajesh Deshmukh';
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const loadData = async () => {
@@ -37,7 +43,31 @@ export default function Dashboard() {
         api.get('/queue').catch(() => ({ data: [] })),
         api.get('/referrals').catch(() => ({ data: [] }))
       ]);
-      setQueue(Array.isArray(queueRes.data) ? queueRes.data : []);
+
+      let rawQueue = Array.isArray(queueRes.data) && queueRes.data.length > 0 ? queueRes.data : [];
+      if (rawQueue.length === 0) {
+        try {
+          const cached = JSON.parse(localStorage.getItem(QUEUE_STORAGE_KEY) || '[]');
+          if (Array.isArray(cached) && cached.length > 0) rawQueue = cached;
+        } catch {}
+      }
+
+      // Single-consultation invariant: in OPD Room 1, at most 1 patient is IN_CONSULTATION.
+      // Any remaining queue entries are waiting in line for consultation.
+      let activeServingFound = false;
+      const normalizedQueue = rawQueue.map((e: any) => {
+        if (e.status === 'IN_CONSULTATION') {
+          if (!activeServingFound) {
+            activeServingFound = true;
+            return e;
+          }
+          return { ...e, status: 'WAITING' };
+        }
+        return e;
+      });
+
+      setQueue(normalizedQueue);
+      localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(normalizedQueue));
       setReferrals(Array.isArray(referralsRes.data) ? referralsRes.data : []);
     } catch {
       // Graceful fallback
@@ -48,6 +78,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
+
+    // Ensure localStorage session maintains doctor identity when active on Doctor Dashboard
+    if (user.role === 'DOCTOR' && (!user.name || !user.name.startsWith('Dr'))) {
+      localStorage.setItem('ayusync_user', JSON.stringify({ ...user, name: 'Dr. Rajesh Deshmukh' }));
+    }
 
     // Subscribe to real-time referral events so doctor dashboard receives live submissions
     const serverUrl = getBaseServerUrl();
@@ -75,9 +110,12 @@ export default function Dashboard() {
     return () => { socket.disconnect(); };
   }, []);
 
-  // Dynamically calculate waiting patients (WAITING or PRIORITY)
+  // Waiting patients and active consultation breakdown
   const waitingPatients = queue.filter(q => q.status === 'WAITING' || q.status === 'PRIORITY');
+  const inConsultPatients = queue.filter(q => q.status === 'IN_CONSULTATION');
   const waitingCount = waitingPatients.length;
+  const inConsultCount = inConsultPatients.length;
+  const totalQueueCount = queue.length;
 
   // Active incoming referrals waiting for doctor triage/acceptance (CREATED or SUBMITTED)
   const pendingReferrals = referrals.filter(r => ['CREATED', 'SUBMITTED'].includes(r.status));
@@ -119,7 +157,7 @@ export default function Dashboard() {
 
   return (
     <PageShell
-      title={`${greeting}, ${name}.`}
+      title={`${greeting}, ${doctorName}.`}
       subtitle={`Baramati CHC, Pune District · ${today}`}
       action={
         <Link
@@ -127,7 +165,7 @@ export default function Dashboard() {
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1e6641] hover:bg-[#165032] text-white text-sm font-semibold transition-colors"
         >
           <Stethoscope size={15} />
-          Open consultation queue
+          Open consultation queue ({totalQueueCount})
         </Link>
       }
     >
@@ -153,10 +191,11 @@ export default function Dashboard() {
               </div>
               <div className="text-sm text-gray-500 mt-0.5">
                 {waitingCount === 1 ? 'patient waiting in OPD queue' : 'patients waiting in OPD queue'}
+                {inConsultCount > 0 && <span className="text-emerald-700 font-medium"> · {inConsultCount} in consultation</span>}
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold text-[#1e6641] group-hover:gap-2.5 transition-all">
-              Manage live queue <ArrowRight size={13} />
+              Manage live queue ({totalQueueCount}) <ArrowRight size={13} />
             </div>
           </Link>
 

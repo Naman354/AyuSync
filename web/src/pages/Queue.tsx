@@ -438,14 +438,27 @@ const DEFAULT_DEMO_QUEUE = [
 ];
 
 function getStoredQueue(): any[] {
+  let list = DEFAULT_DEMO_QUEUE;
   try {
     const raw = localStorage.getItem(QUEUE_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
     }
   } catch {}
-  return DEFAULT_DEMO_QUEUE;
+
+  // Single active consultation invariant in Room 1
+  let activeServingFound = false;
+  return list.map((e: any) => {
+    if (e.status === 'IN_CONSULTATION') {
+      if (!activeServingFound) {
+        activeServingFound = true;
+        return e;
+      }
+      return { ...e, status: 'WAITING' };
+    }
+    return e;
+  });
 }
 
 // ── Main Queue Page ───────────────────────────────────────────────────────────
@@ -534,13 +547,25 @@ export default function Queue() {
     try {
       setLoading(true);
       const r = await api.get('/queue');
-      if (Array.isArray(r.data) && r.data.length > 0) {
-        setQueue(r.data);
-        localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(r.data));
-      } else {
-        const stored = getStoredQueue();
-        setQueue(stored);
-      }
+      let rawQueue = (Array.isArray(r.data) && r.data.length > 0) ? r.data : getStoredQueue();
+
+      // Normalize single active consultation in Room 1:
+      // In OPD Room 1, only 1 patient can be actively examined (IN_CONSULTATION).
+      // Any other non-active entries are waiting in line.
+      let activeServingFound = false;
+      const normalizedQueue = rawQueue.map((e: any) => {
+        if (e.status === 'IN_CONSULTATION') {
+          if (!activeServingFound) {
+            activeServingFound = true;
+            return e;
+          }
+          return { ...e, status: 'WAITING' };
+        }
+        return e;
+      });
+
+      setQueue(normalizedQueue);
+      localStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(normalizedQueue));
       setError('');
     } catch {
       // Graceful offline fallback to stored/demo queue
@@ -564,7 +589,7 @@ export default function Queue() {
   const activeQueuePatientIds = new Set(
     queue
       .filter(e => ['WAITING', 'PRIORITY', 'IN_CONSULTATION'].includes(e.status))
-      .map(e => e.appointment?.patient?.id || e.patientId || e.patient?.id)
+      .map(e => e.appointment?.patient?.id || e.patientId || e.appointment?.patientId)
       .filter(Boolean)
   );
 
@@ -572,31 +597,31 @@ export default function Queue() {
     setModalError('');
     const errors: Record<string, string> = {};
 
-    if (!selFacility) errors.selFacility = 'Please select a clinic or facility.';
-
-    const prioNum = parseInt(priority, 10);
-    if (isNaN(prioNum) || prioNum < 0 || prioNum > 10) {
-      errors.priority = 'Priority must be a number between 0 and 10.';
-    }
+    if (!isWalkIn && !selPatient) errors.selPatient = 'Please select a registered patient';
+    if (!selFacility) errors.selFacility = 'Please select a healthcare facility';
 
     if (isWalkIn) {
-      if (!walkInName.trim()) errors.walkInName = 'Please enter patient name.';
-      if (!walkInAge || isNaN(Number(walkInAge))) errors.walkInAge = 'Please enter valid age.';
-    } else {
-      if (!selPatient) errors.selPatient = 'Please select a patient.';
-      else if (activeQueuePatientIds.has(selPatient)) {
-        errors.selPatient = 'This patient is already currently waiting or in consultation.';
+      if (!walkInName.trim()) errors.walkInName = 'Patient full name is required';
+      if (!walkInAge.trim() || isNaN(Number(walkInAge)) || Number(walkInAge) < 0 || Number(walkInAge) > 125) {
+        errors.walkInAge = 'Please enter a valid age (0–125)';
       }
     }
 
-    if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
+    if (!isWalkIn && selPatient && activeQueuePatientIds.has(selPatient)) {
+      errors.selPatient = 'This patient is already currently waiting or in consultation.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const prioNum = parseInt(priority, 10);
       let patientIdToEnqueue = selPatient;
 
       if (isWalkIn) {
-        // Register walk-in patient first
         try {
           const regRes = await api.post('/patients', {
             name: walkInName.trim(),
@@ -666,6 +691,13 @@ export default function Queue() {
         let updated: any[];
         if (newStatus === 'COMPLETED' || newStatus === 'CANCELLED') {
           updated = prev.filter(e => e.id !== id);
+        } else if (newStatus === 'IN_CONSULTATION') {
+          // In Room 1, only the called patient is IN_CONSULTATION. Any previous in-consultation patient completes or reverts to WAITING.
+          updated = prev.map(e => {
+            if (e.id === id) return { ...e, status: 'IN_CONSULTATION' };
+            if (e.status === 'IN_CONSULTATION') return { ...e, status: 'WAITING' };
+            return e;
+          });
         } else {
           updated = prev.map(e => e.id === id ? { ...e, status: newStatus } : e);
         }

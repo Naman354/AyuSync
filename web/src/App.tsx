@@ -105,7 +105,12 @@ const ProtectedRoute = () => {
     else window.location.href = '/dashboard';
   };
 
-  const displayName = user.name || (isWorker ? 'Sunita Patil' : isPatient ? 'Ramesh Kulkarni' : 'Dr. Rajesh Deshmukh');
+  const isDoctor = !isWorker && !isPatient;
+  const displayName = isDoctor
+    ? (user.name && (user.name.startsWith('Dr') || user.name.includes('Deshmukh') || user.name.includes('Joshi')) ? user.name : 'Dr. Rajesh Deshmukh')
+    : isWorker
+    ? (user.name && !user.name.includes('Dr') ? user.name : 'Sunita Patil')
+    : (user.name && !user.name.includes('Dr') ? user.name : 'Ramesh Kulkarni');
 
   return (
     <div className="min-h-screen bg-[#f8f7f3] font-sans text-gray-900">
