@@ -3,7 +3,7 @@ import { prisma } from '../../index';
 
 let cachedMetrics: any = null;
 let cacheTimestamp = 0;
-const METRICS_CACHE_TTL_MS = 15000; // 15 seconds
+const METRICS_CACHE_TTL_MS = 5000; // 5 seconds
 
 export const getDashboardMetrics = async (req: Request, res: Response) => {
   try {
@@ -23,7 +23,7 @@ export const getDashboardMetrics = async (req: Request, res: Response) => {
       }),
       prisma.queueEntry.count({
         where: {
-          status: 'WAITING'
+          status: { in: ['WAITING', 'PRIORITY'] }
         }
       })
     ]);

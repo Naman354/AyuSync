@@ -27,5 +27,5 @@ EXPOSE 5000
 ENV PORT=5000
 ENV NODE_ENV=production
 
-# On container startup, sync database schema, seed initial records, and start server
-CMD ["sh", "-c", "npx prisma db push && npx ts-node prisma/seed.ts && node dist/index.js"]
+# Start the server immediately so Render detects the open port
+CMD ["node", "dist/index.js"]

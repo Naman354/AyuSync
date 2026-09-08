@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createPatient, searchPatients, getPatientTimeline, createEncounter } from './patient.controller';
+import { createPatient, searchPatients, getPatientTimeline, createEncounter, addCondition } from './patient.controller';
 import { authenticate } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/rbac';
 
@@ -12,6 +12,7 @@ router.use(authenticate);
 router.post('/', requirePermission('patient.create'), createPatient);
 router.get('/search', requirePermission('patient.read'), searchPatients);
 router.get('/:id/timeline', requirePermission('patient.read'), getPatientTimeline);
+router.post('/:id/conditions', addCondition);
 
 // Encounter routes
 router.post('/encounter', requirePermission('encounter.create'), createEncounter);
