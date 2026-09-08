@@ -315,6 +315,15 @@ class AppTranslations {
     'sync_now_btn': 'Sync / Upload Queue Now',
     'syncing_in_progress': 'Syncing...',
     'back_to_dashboard': 'Back to Home Dashboard',
+
+    // Voice Input (Primary Symptom)
+    'voice_input_tooltip': 'Voice-to-Text (Speak Primary Symptom)',
+    'voice_listening': 'Listening (English)... Speak symptom now',
+    'voice_tap_to_stop': 'Tap to stop voice recording',
+    'voice_permission_denied': 'Microphone permission denied. Please allow microphone access in Settings.',
+    'voice_not_available': 'Speech recognition is not available or supported on this device.',
+    'voice_error': 'Voice recognition error: {error}',
+    'voice_active_badge': '🎙️ Listening (English)...',
   };
 
   static const Map<String, String> _hi = {
@@ -631,6 +640,15 @@ class AppTranslations {
     'sync_now_btn': 'कतार अभी सिंक / अपलोड करें',
     'syncing_in_progress': 'सिंक हो रहा है…',
     'back_to_dashboard': 'होम डैशबोर्ड पर वापस जाएं',
+
+    // Voice Input (Primary Symptom)
+    'voice_input_tooltip': 'वॉइस-टू-टेक्स्ट (लक्षण बोलें)',
+    'voice_listening': 'सुन रहे हैं (अंग्रेजी)... अभी लक्षण बोलें',
+    'voice_tap_to_stop': 'वॉइस रिकॉर्डिंग रोकने के लिए टैप करें',
+    'voice_permission_denied': 'माइक्रोफ़ोन अनुमति अस्वीकृत। कृपया सेटिंग्स में अनुमति दें।',
+    'voice_not_available': 'इस डिवाइस पर वॉइस रिकग्निशन उपलब्ध नहीं है।',
+    'voice_error': 'वॉइस रिकग्निशन त्रुटि: {error}',
+    'voice_active_badge': '🎙️ सुन रहे हैं (English)...',
   };
 
   static const Map<String, String> _mr = {
@@ -944,9 +962,18 @@ class AppTranslations {
     'sync_queue_empty': 'सिंक रांग रिकामी आहे',
     'all_records_synced': 'सर्व ऑफलाइन नोंदी पूर्णपणे समक्रमित झाल्या आहेत.',
     'proceed_to_ai_triage': 'एआय क्लिनिकल ट्रायजवर जा',
-    'sync_now_btn': 'रांग आता सिंक / अपलोड करा',
-    'syncing_in_progress': 'सिंक होत आहे…',
+    'sync_now_btn': 'रांग आता समक्रमित / अपलोड करा',
+    'syncing_in_progress': 'समक्रमित होत आहे…',
     'back_to_dashboard': 'मुख्य डॅशबोर्डवर परत जा',
+
+    // Voice Input (Primary Symptom)
+    'voice_input_tooltip': 'व्हॉइस-टू-टेक्स्ट (लक्षण बोला)',
+    'voice_listening': 'ऐकत आहे (इंग्रजी)... आता लक्षण बोला',
+    'voice_tap_to_stop': 'व्हॉइस रेकॉर्डिंग थांबवण्यासाठी टॅप करा',
+    'voice_permission_denied': 'मायक्रोफोन परवानगी नाकारली. कृपया सेटिंग्जमध्ये परवानगी द्या.',
+    'voice_not_available': 'या डिव्हाइसवर व्हॉइस रेकग्निशन उपलब्ध नाही.',
+    'voice_error': 'व्हॉइस रेकग्निशन त्रुटी: {error}',
+    'voice_active_badge': '🎙️ ऐकत आहे (English)...',
   };
 
   static String get(AppLanguage language, String key, {Map<String, String>? args}) {

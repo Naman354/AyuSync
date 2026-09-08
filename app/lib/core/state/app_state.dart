@@ -128,10 +128,12 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  AppState() {
+  AppState({bool monitorNetwork = true}) {
     _initDefaults();
     _loadFromLocalDb();
-    _initNetworkMonitoring();
+    if (monitorNetwork) {
+      _initNetworkMonitoring();
+    }
     _initLanguage();
   }
 
@@ -1147,5 +1149,11 @@ class AppState extends ChangeNotifier {
 
   List<Assessment> getAssessmentsForPatient(String patientId) {
     return _patientAssessments[patientId] ?? [];
+  }
+
+  @override
+  void dispose() {
+    NetworkQualityService().stopMonitoring();
+    super.dispose();
   }
 }

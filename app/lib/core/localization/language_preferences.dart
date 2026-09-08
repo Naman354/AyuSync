@@ -36,6 +36,7 @@ class LanguagePreferences {
   /// Saves the chosen language preference to local storage.
   static Future<void> saveLanguage(AppLanguage language) async {
     _cachedLanguage = language;
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$_fileName');

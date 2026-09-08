@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/patient_model.dart';
 import '../../../../core/models/assessment_model.dart';
 import '../../../../core/utils/patient_validators.dart';
+import '../../../../core/services/voice_recognition_service.dart';
 import 'registration_success_page.dart';
 
 class NewPatientPage extends StatefulWidget {
@@ -48,6 +49,11 @@ class _NewPatientPageState extends State<NewPatientPage> {
   int _durationDays = 3;
   final _notesController = TextEditingController();
 
+  // Voice-to-Text Service (Configured for English recognition)
+  final VoiceRecognitionService _voiceService = VoiceRecognitionService();
+  bool _isListening = false;
+  String _speechBaseText = '';
+
   // Vitals
   final _tempController = TextEditingController(text: '98.6');
   final _systolicController = TextEditingController(text: '120');
@@ -57,6 +63,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
 
   @override
   void dispose() {
+    _voiceService.cancelListening();
     _nameController.dispose();
     _ageController.dispose();
     _dobController.dispose();
@@ -178,6 +185,63 @@ class _NewPatientPageState extends State<NewPatientPage> {
         margin: const EdgeInsets.all(16),
       ),
     );
+  }
+
+  Future<void> _toggleVoiceInput(AppState appState) async {
+    if (_isListening) {
+      await _voiceService.stopListening();
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    _speechBaseText = _symptomController.text.trim();
+
+    setState(() => _isListening = true);
+
+    final started = await _voiceService.startListening(
+      onResult: (recognizedWords, isFinal) {
+        if (!mounted) return;
+        setState(() {
+          if (recognizedWords.trim().isNotEmpty) {
+            final combined = _speechBaseText.isEmpty
+                ? recognizedWords.trim()
+                : '$_speechBaseText ${recognizedWords.trim()}';
+            _symptomController.text = combined;
+            _symptomController.selection = TextSelection.fromPosition(
+              TextPosition(offset: combined.length),
+            );
+            _clearError('symptom');
+          }
+          if (isFinal) {
+            _isListening = false;
+          }
+        });
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        final lower = err.toLowerCase();
+        if (lower.contains('permission') || lower.contains('denied') || lower.contains('microphone')) {
+          _showError(appState.translate('voice_permission_denied'));
+        } else if (lower.contains('not available') || lower.contains('unavailable')) {
+          _showError(appState.translate('voice_not_available'));
+        } else {
+          _showError(appState.translate('voice_error', args: {'error': err}));
+        }
+      },
+      onDone: () {
+        if (mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+
+    if (!started && mounted) {
+      setState(() => _isListening = false);
+    }
   }
 
   Future<void> _pickDob() async {
@@ -658,11 +722,113 @@ class _NewPatientPageState extends State<NewPatientPage> {
           maxLines: 2,
           textInputAction: TextInputAction.next,
           errorText: _fieldErrors['symptom'],
+          suffixIcon: Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: IconButton(
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _isListening
+                    ? Container(
+                        key: const ValueKey('mic_active'),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFDC2626).withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+                      )
+                    : Container(
+                        key: const ValueKey('mic_idle'),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.mintLight,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.forest.withValues(alpha: 0.3)),
+                        ),
+                        child: const Icon(Icons.mic_none_rounded, color: AppColors.forest, size: 20),
+                      ),
+              ),
+              tooltip: _isListening
+                  ? appState.translate('voice_tap_to_stop')
+                  : appState.translate('voice_input_tooltip'),
+              onPressed: () => _toggleVoiceInput(appState),
+            ),
+          ),
           onChanged: (_) {
             _clearError('symptom');
             setState(() {});
           },
         ),
+        if (_isListening) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFDC2626).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFDC2626)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    appState.translate('voice_listening'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFDC2626),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => _toggleVoiceInput(appState),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDC2626),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.stop_rounded, color: Colors.white, size: 14),
+                        const SizedBox(width: 2),
+                        Text(
+                          appState.translate('voice_tap_to_stop'),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         Row(
           children: [
@@ -960,11 +1126,14 @@ class _NewPatientPageState extends State<NewPatientPage> {
                       height: 22,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                     )
-                  : Text(
-                      _currentStep == 1
-                          ? appState.translate('continue_to_vitals')
-                          : appState.translate('save_patient_assess'),
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _currentStep == 1
+                            ? appState.translate('continue_to_vitals')
+                            : appState.translate('save_patient_assess'),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
                     ),
             ),
           ),
