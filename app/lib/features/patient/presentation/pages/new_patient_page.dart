@@ -301,24 +301,13 @@ class _NewPatientPageState extends State<NewPatientPage> {
 
     setState(() => _isSubmitting = true);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const PopScope(
-        canPop: false,
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.forest),
-        ),
-      ),
-    );
-
     try {
       final parsedAge = int.tryParse(_ageController.text.trim()) ??
           PatientValidators.calculateAgeFromDob(_dobController.text.trim()) ??
           30;
       final formattedPhone = PatientValidators.normalizePhone(_phoneController.text);
 
-      // 1. Register Patient with strictly backend fields
+      // 1. Instant local-first patient registration (persists to SQLite immediately & kicks off non-blocking background sync)
       final patient = await appState.registerPatient(
         name: _nameController.text.trim(),
         age: parsedAge,
@@ -329,7 +318,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
         abhaId: _abhaController.text.trim().isNotEmpty ? _abhaController.text.trim() : null,
       );
 
-      // 2. Register Vitals & Symptoms
+      // 2. Instant local-first vitals & clinical assessment registration
       final vitals = Vitals(
         temperature: double.tryParse(_tempController.text.trim()),
         systolicBp: int.tryParse(_systolicController.text.trim()),
@@ -348,9 +337,9 @@ class _NewPatientPageState extends State<NewPatientPage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // dismiss loading
       setState(() => _isSubmitting = false);
 
+      // Instant transition to RegistrationSuccessPage with zero waiting delay
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -359,14 +348,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Saved with local sync queue: ${e.toString().replaceAll("Exception: ", "")}'),
-          backgroundColor: AppColors.forest,
-        ),
-      );
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

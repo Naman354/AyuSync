@@ -531,7 +531,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- Patient Registration ---
+  // --- Patient Registration (Instant Local-First with Background Async Upload) ---
   Future<Patient> registerPatient({
     required String name,
     required int age,
@@ -544,7 +544,7 @@ class AppState extends ChangeNotifier {
     final tempId = 'PAT-${_uuid.v4().substring(0, 8)}';
     final cleanAbha = (abhaId != null && abhaId.trim().isNotEmpty) ? abhaId.trim() : null;
 
-    Patient newPatient = Patient(
+    final newPatient = Patient(
       id: tempId,
       name: name.trim(),
       age: age,
@@ -557,53 +557,83 @@ class AppState extends ChangeNotifier {
       isSynced: false,
     );
 
-    bool directUploadSuccess = false;
+    final opId = _uuid.v4();
+
+    // 1. Queue mutation in SQLite & sync queue list
+    _queuePatientMutation(newPatient, operationId: opId);
+
+    // 2. Persist locally in SQLite
+    await LocalDatabase.instance.insertPatient(newPatient.toMap());
+
+    // 3. Update in-memory state immediately (Instant UI Response)
+    _patients.insert(0, newPatient);
+    _currentPatient = newPatient;
+    notifyListeners();
+
+    // 4. Asynchronous / non-blocking background sync if online
     if (_isOnline) {
+      _uploadPatientInBackground(newPatient, opId);
+    }
+
+    return newPatient;
+  }
+
+  void _uploadPatientInBackground(Patient patient, String opId) {
+    () async {
       try {
         final created = await ApiService.instance.createPatient(
-          name: newPatient.name,
-          age: newPatient.age,
-          gender: newPatient.gender,
-          phone: newPatient.phone,
-          village: newPatient.village,
-          dob: newPatient.dob,
-          abhaId: newPatient.abhaId,
+          name: patient.name,
+          age: patient.age,
+          gender: patient.gender,
+          phone: patient.phone,
+          village: patient.village,
+          dob: patient.dob,
+          abhaId: patient.abhaId,
         );
 
         if (created.containsKey('id') && created['id'] != null) {
           final serverId = created['id'].toString();
-          newPatient = newPatient.copyWith(
+
+          if (serverId != patient.id) {
+            await LocalDatabase.instance.updatePatientId(patient.id, serverId);
+          } else {
+            await LocalDatabase.instance.markPatientSynced(patient.id);
+          }
+          await LocalDatabase.instance.markMutationSynced(opId);
+
+          final updatedPatient = patient.copyWith(
             id: serverId,
             isSynced: true,
           );
-          directUploadSuccess = true;
+
+          final idx = _patients.indexWhere((p) => p.id == patient.id || p.id == serverId);
+          if (idx != -1) {
+            _patients[idx] = updatedPatient;
+          }
+          if (_currentPatient?.id == patient.id || _currentPatient?.id == serverId || _currentPatient?.name == patient.name) {
+            _currentPatient = updatedPatient;
+          }
+
+          _syncQueue.removeWhere((item) => item.id == opId);
+          notifyListeners();
         }
       } catch (e) {
-        debugPrint('Direct backend create patient failed, will queue mutation: $e');
+        debugPrint('Background patient upload notice: $e (safely queued in SQLite for auto-sync)');
       }
-    }
-
-    if (!directUploadSuccess) {
-      _queuePatientMutation(newPatient);
-    }
-
-    await LocalDatabase.instance.insertPatient(newPatient.toMap());
-    _patients.insert(0, newPatient);
-    _currentPatient = newPatient;
-    notifyListeners();
-    return newPatient;
+    }();
   }
 
-  void _queuePatientMutation(Patient patient) {
+  void _queuePatientMutation(Patient patient, {String? operationId}) {
+    final opId = operationId ?? _uuid.v4();
     _syncQueue.add(SyncItem(
-      id: _uuid.v4(),
+      id: opId,
       entityType: 'PATIENT',
       action: 'CREATE',
       description: 'New Patient Registration: ${patient.name} (${patient.village})',
     ));
 
     SyncEngine().queueMutation(
-      operationId: _uuid.v4(),
+      operationId: opId,
       entityId: patient.id,
       entity: 'PATIENT',
       action: 'CREATE',
@@ -620,7 +650,7 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  // --- Assessment & AI Triage Creation ---
+  // --- Assessment & AI Triage Creation (Instant Local-First with Background Async AI/Sync) ---
   Future<Assessment> createAssessment({
     required String patientId,
     required String primarySymptom,
@@ -630,7 +660,7 @@ class AppState extends ChangeNotifier {
     String? clinicalNotes,
   }) async {
     final asmId = 'ASM-${_uuid.v4().substring(0, 8)}';
-    Assessment assessment = Assessment(
+    final assessment = Assessment(
       id: asmId,
       patientId: patientId,
       primarySymptom: primarySymptom,
@@ -642,172 +672,15 @@ class AppState extends ChangeNotifier {
       isSynced: false,
     );
 
-    // Compute local triage prediction first as fallback
-    TriageResult triageResult = _computeLocalTriage(assessment);
+    // 1. Instant local XAI triage computation (Zero latency for ASHA worker)
+    final triageResult = _computeLocalTriage(assessment);
 
-    if (_isOnline) {
-      try {
-        final symptomsPayload = [
-          {
-            'name': primarySymptom,
-            'duration': '$durationDays days',
-            'severity': severity.toUpperCase(),
-          }
-        ];
+    final opId = _uuid.v4();
 
-        // Format vitals strictly matching backend validator requirements
-        final vitalsPayload = <Map<String, dynamic>>[];
-        if (vitals.systolicBp != null) {
-          vitalsPayload.add({
-            'type': 'BP_SYSTOLIC',
-            'value': vitals.systolicBp!,
-            'unit': 'mmHg',
-          });
-        }
-        if (vitals.diastolicBp != null) {
-          vitalsPayload.add({
-            'type': 'BP_DIASTOLIC',
-            'value': vitals.diastolicBp!,
-            'unit': 'mmHg',
-          });
-        }
-        if (vitals.pulseRate != null) {
-          vitalsPayload.add({
-            'type': 'HEART_RATE',
-            'value': vitals.pulseRate!,
-            'unit': 'bpm',
-          });
-        }
-        if (vitals.temperature != null) {
-          vitalsPayload.add({
-            'type': 'TEMP',
-            'value': vitals.temperature!,
-            'unit': '°F',
-          });
-        }
-        if (vitals.spo2 != null) {
-          vitalsPayload.add({
-            'type': 'SPO2',
-            'value': vitals.spo2!,
-            'unit': '%',
-          });
-        }
+    // 2. Queue mutation for sync
+    _queueAssessmentMutation(assessment, operationId: opId);
 
-        // 1. Direct AI Triage Request (Matching Web ASHA Flow)
-        try {
-          final aiRes = await ApiService.instance.triageAssessment(
-            age: _currentPatient?.age ?? 30,
-            gender: _currentPatient?.gender ?? 'Female',
-            symptoms: symptomsPayload,
-            vitals: {
-              'blood_pressure': '${vitals.systolicBp ?? 120}/${vitals.diastolicBp ?? 80}',
-              'bpSystolic': vitals.systolicBp ?? 120,
-              'bpDiastolic': vitals.diastolicBp ?? 80,
-              'spo2': vitals.spo2 ?? 98,
-              'heart_rate': vitals.pulseRate ?? 72,
-              'temperature': vitals.temperature ?? 98.6,
-            },
-          );
-
-          if (aiRes.isNotEmpty && (aiRes.containsKey('urgency') || aiRes.containsKey('urgencyCategory'))) {
-            final urgency = (aiRes['urgency'] ?? aiRes['urgencyCategory'] ?? triageResult.urgencyLevel).toString().toUpperCase();
-            final reasons = <String>[];
-            if (aiRes['reasons'] is List) {
-              for (var r in (aiRes['reasons'] as List)) {
-                reasons.add(r.toString());
-              }
-            }
-            final confidence = (aiRes['confidence'] as num?)?.toDouble() ?? 0.88;
-            final score = (urgency == 'URGENT') ? 92 : (urgency == 'PRIORITY' ? 65 : 25);
-            final recAction = aiRes['recommended_next_action']?.toString() ?? triageResult.recommendedAction;
-            final explanation = reasons.isNotEmpty ? reasons.join('; ') : triageResult.explanationText;
-
-            triageResult = TriageResult(
-              assessmentId: assessment.id,
-              urgencyLevel: urgency,
-              urgencyScore: score,
-              contributingFactors: reasons.isNotEmpty ? reasons : triageResult.contributingFactors,
-              recommendedAction: recAction,
-              explanationText: explanation,
-              confirmedUrgency: urgency,
-              confidence: confidence,
-            );
-          }
-        } catch (aiErr) {
-          debugPrint('AI triage direct call notice: $aiErr');
-        }
-
-        String? encounterId;
-        try {
-          final enc = await ApiService.instance.createEncounter(patientId: patientId);
-          encounterId = enc['id']?.toString();
-        } catch (e) {
-          debugPrint('Encounter create notice: $e');
-        }
-
-        final res = await ApiService.instance.createAssessment(
-          patientId: patientId,
-          encounterId: encounterId,
-          symptoms: symptomsPayload,
-          vitals: vitalsPayload,
-        );
-
-        if (res.containsKey('id')) {
-          assessment = Assessment(
-            id: res['id'].toString(),
-            patientId: patientId,
-            primarySymptom: primarySymptom,
-            severity: severity,
-            durationDays: durationDays,
-            vitals: vitals,
-            clinicalNotes: clinicalNotes,
-            timestamp: DateTime.now(),
-            isSynced: true,
-          );
-        }
-
-        // Parse AI Recommendations if returned from backend assessment
-        if (res['aiRecommendations'] is List && (res['aiRecommendations'] as List).isNotEmpty) {
-          final ai = res['aiRecommendations'][0];
-          final urgency = ai['urgencyCategory']?.toString() ?? triageResult.urgencyLevel;
-          final factors = <String>[];
-          if (ai['reasons'] is List) {
-            for (var r in ai['reasons']) {
-              factors.add(r.toString());
-            }
-          }
-          final confidence = (ai['confidence'] as num?)?.toDouble() ?? 0.85;
-
-          triageResult = TriageResult(
-            assessmentId: assessment.id,
-            urgencyLevel: urgency,
-            urgencyScore: (confidence * 100).toInt().clamp(10, 99),
-            contributingFactors: factors.isNotEmpty ? factors : triageResult.contributingFactors,
-            recommendedAction: urgency == 'URGENT'
-                ? 'Immediate expedited referral to 24x7 Emergency CHC/District Hospital.'
-                : (urgency == 'PRIORITY'
-                    ? 'Same-day consultation at Primary Health Centre (PHC). Continuous monitoring.'
-                    : 'Standard outpatient routine care at Sub-Centre / PHC.'),
-            explanationText: 'AI Triage classified as $urgency based on clinical vital thresholds.',
-            confirmedUrgency: urgency,
-            confidence: confidence,
-          );
-        }
-      } catch (e) {
-        debugPrint('Direct backend create assessment error, queuing mutation: $e');
-        _queueAssessmentMutation(assessment);
-      }
-    } else {
-      _queueAssessmentMutation(assessment);
-    }
-
-    if (!_patientAssessments.containsKey(patientId)) {
-      _patientAssessments[patientId] = [];
-    }
-    _patientAssessments[patientId]!.insert(0, assessment);
-    _currentAssessment = assessment;
-    _currentTriageResult = triageResult;
-
+    // 3. Persist locally in SQLite
     await LocalDatabase.instance.insertAssessment({
       'id': assessment.id,
       'patientId': assessment.patientId,
@@ -817,23 +690,201 @@ class AppState extends ChangeNotifier {
       'vitals': jsonEncode(assessment.vitals.toMap()),
       'clinicalNotes': assessment.clinicalNotes ?? '',
       'timestamp': assessment.timestamp.toIso8601String(),
-      'isSynced': assessment.isSynced ? 1 : 0,
+      'isSynced': 0,
     });
 
+    // 4. Update in-memory state immediately
+    if (!_patientAssessments.containsKey(patientId)) {
+      _patientAssessments[patientId] = [];
+    }
+    _patientAssessments[patientId]!.insert(0, assessment);
+    _currentAssessment = assessment;
+    _currentTriageResult = triageResult;
     notifyListeners();
+
+    // 5. Asynchronous / non-blocking background AI triage & backend sync
+    if (_isOnline) {
+      _uploadAssessmentInBackground(assessment, opId);
+    }
+
     return assessment;
   }
 
-  void _queueAssessmentMutation(Assessment assessment) {
+  void _uploadAssessmentInBackground(Assessment assessment, String opId) {
+    () async {
+      try {
+        final symptomsPayload = [
+          {
+            'name': assessment.primarySymptom,
+            'duration': '${assessment.durationDays} days',
+            'severity': assessment.severity.toUpperCase(),
+          }
+        ];
+
+        final vitalsPayload = <Map<String, dynamic>>[];
+        if (assessment.vitals.systolicBp != null) {
+          vitalsPayload.add({
+            'type': 'BP_SYSTOLIC',
+            'value': assessment.vitals.systolicBp!,
+            'unit': 'mmHg',
+          });
+        }
+        if (assessment.vitals.diastolicBp != null) {
+          vitalsPayload.add({
+            'type': 'BP_DIASTOLIC',
+            'value': assessment.vitals.diastolicBp!,
+            'unit': 'mmHg',
+          });
+        }
+        if (assessment.vitals.pulseRate != null) {
+          vitalsPayload.add({
+            'type': 'HEART_RATE',
+            'value': assessment.vitals.pulseRate!,
+            'unit': 'bpm',
+          });
+        }
+        if (assessment.vitals.temperature != null) {
+          vitalsPayload.add({
+            'type': 'TEMP',
+            'value': assessment.vitals.temperature!,
+            'unit': '°F',
+          });
+        }
+        if (assessment.vitals.spo2 != null) {
+          vitalsPayload.add({
+            'type': 'SPO2',
+            'value': assessment.vitals.spo2!,
+            'unit': '%',
+          });
+        }
+
+        // 1. Background AI Triage refinement
+        try {
+          final aiRes = await ApiService.instance.triageAssessment(
+            age: _currentPatient?.age ?? 30,
+            gender: _currentPatient?.gender ?? 'Female',
+            symptoms: symptomsPayload,
+            vitals: {
+              'blood_pressure': '${assessment.vitals.systolicBp ?? 120}/${assessment.vitals.diastolicBp ?? 80}',
+              'bpSystolic': assessment.vitals.systolicBp ?? 120,
+              'bpDiastolic': assessment.vitals.diastolicBp ?? 80,
+              'spo2': assessment.vitals.spo2 ?? 98,
+              'heart_rate': assessment.vitals.pulseRate ?? 72,
+              'temperature': assessment.vitals.temperature ?? 98.6,
+            },
+          );
+
+          if (aiRes.isNotEmpty && (aiRes.containsKey('urgency') || aiRes.containsKey('urgencyCategory'))) {
+            final urgency = (aiRes['urgency'] ?? aiRes['urgencyCategory'] ?? _currentTriageResult?.urgencyLevel ?? 'ROUTINE').toString().toUpperCase();
+            final reasons = <String>[];
+            if (aiRes['reasons'] is List) {
+              for (var r in (aiRes['reasons'] as List)) {
+                reasons.add(r.toString());
+              }
+            }
+            final confidence = (aiRes['confidence'] as num?)?.toDouble() ?? 0.88;
+            final score = (urgency == 'URGENT') ? 92 : (urgency == 'PRIORITY' ? 65 : 25);
+            final recAction = aiRes['recommended_next_action']?.toString() ?? _currentTriageResult?.recommendedAction ?? 'Standard outpatient routine care at Sub-Centre / PHC.';
+            final explanation = reasons.isNotEmpty ? reasons.join('; ') : (_currentTriageResult?.explanationText ?? 'AI Triage evaluation complete.');
+
+            _currentTriageResult = TriageResult(
+              assessmentId: assessment.id,
+              urgencyLevel: urgency,
+              urgencyScore: score,
+              contributingFactors: reasons.isNotEmpty ? reasons : (_currentTriageResult?.contributingFactors ?? []),
+              recommendedAction: recAction,
+              explanationText: explanation,
+              confirmedUrgency: urgency,
+              confidence: confidence,
+            );
+            notifyListeners();
+          }
+        } catch (aiErr) {
+          debugPrint('Background AI triage notice: $aiErr');
+        }
+
+        // 2. Background Encounter and Assessment upload
+        String? encounterId;
+        final targetPatientId = _currentPatient?.id ?? assessment.patientId;
+        try {
+          final enc = await ApiService.instance.createEncounter(patientId: targetPatientId);
+          encounterId = enc['id']?.toString();
+        } catch (e) {
+          debugPrint('Background encounter notice: $e');
+        }
+
+        final res = await ApiService.instance.createAssessment(
+          patientId: targetPatientId,
+          encounterId: encounterId,
+          symptoms: symptomsPayload,
+          vitals: vitalsPayload,
+        );
+
+        if (res.containsKey('id')) {
+          final updatedAssessment = assessment.copyWith(
+            id: res['id'].toString(),
+            patientId: targetPatientId,
+            isSynced: true,
+          );
+
+          if (_currentAssessment?.id == assessment.id) {
+            _currentAssessment = updatedAssessment;
+          }
+          if (_patientAssessments.containsKey(assessment.patientId)) {
+            final idx = _patientAssessments[assessment.patientId]!.indexWhere((a) => a.id == assessment.id);
+            if (idx != -1) {
+              _patientAssessments[assessment.patientId]![idx] = updatedAssessment;
+            }
+          }
+
+          if (res['aiRecommendations'] is List && (res['aiRecommendations'] as List).isNotEmpty) {
+            final ai = res['aiRecommendations'][0];
+            final urgency = ai['urgencyCategory']?.toString() ?? _currentTriageResult?.urgencyLevel ?? 'ROUTINE';
+            final factors = <String>[];
+            if (ai['reasons'] is List) {
+              for (var r in ai['reasons']) {
+                factors.add(r.toString());
+              }
+            }
+            final confidence = (ai['confidence'] as num?)?.toDouble() ?? 0.85;
+
+            _currentTriageResult = TriageResult(
+              assessmentId: updatedAssessment.id,
+              urgencyLevel: urgency,
+              urgencyScore: (confidence * 100).toInt().clamp(10, 99),
+              contributingFactors: factors.isNotEmpty ? factors : (_currentTriageResult?.contributingFactors ?? []),
+              recommendedAction: urgency == 'URGENT'
+                  ? 'Immediate expedited referral to 24x7 Emergency CHC/District Hospital.'
+                  : (urgency == 'PRIORITY'
+                      ? 'Same-day consultation at Primary Health Centre (PHC). Continuous monitoring.'
+                      : 'Standard outpatient routine care at Sub-Centre / PHC.'),
+              explanationText: 'AI Triage classified as $urgency based on clinical vital thresholds.',
+              confirmedUrgency: urgency,
+              confidence: confidence,
+            );
+          }
+
+          await LocalDatabase.instance.markMutationSynced(opId);
+          _syncQueue.removeWhere((item) => item.id == opId);
+          notifyListeners();
+        }
+      } catch (e) {
+        debugPrint('Background assessment sync error notice: $e (safely queued in SQLite for auto-sync)');
+      }
+    }();
+  }
+
+  void _queueAssessmentMutation(Assessment assessment, {String? operationId}) {
+    final opId = operationId ?? _uuid.v4();
     _syncQueue.add(SyncItem(
-      id: _uuid.v4(),
+      id: opId,
       entityType: 'ASSESSMENT',
       action: 'CREATE',
       description: 'Vitals & Assessment: ${assessment.primarySymptom} (${assessment.severity})',
     ));
 
     SyncEngine().queueMutation(
-      operationId: _uuid.v4(),
+      operationId: opId,
       entityId: assessment.id,
       entity: 'ASSESSMENT',
       action: 'CREATE',

@@ -133,6 +133,32 @@ class Assessment {
     this.rawAiRecommendation,
   }) : timestamp = timestamp ?? DateTime.now();
 
+  Assessment copyWith({
+    String? id,
+    String? patientId,
+    String? primarySymptom,
+    String? severity,
+    int? durationDays,
+    Vitals? vitals,
+    String? clinicalNotes,
+    DateTime? timestamp,
+    bool? isSynced,
+    Map<String, dynamic>? rawAiRecommendation,
+  }) {
+    return Assessment(
+      id: id ?? this.id,
+      patientId: patientId ?? this.patientId,
+      primarySymptom: primarySymptom ?? this.primarySymptom,
+      severity: severity ?? this.severity,
+      durationDays: durationDays ?? this.durationDays,
+      vitals: vitals ?? this.vitals,
+      clinicalNotes: clinicalNotes ?? this.clinicalNotes,
+      timestamp: timestamp ?? this.timestamp,
+      isSynced: isSynced ?? this.isSynced,
+      rawAiRecommendation: rawAiRecommendation ?? this.rawAiRecommendation,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

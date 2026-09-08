@@ -12,7 +12,15 @@ class RegistrationSuccessPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final isOnline = appState.isOnline && patient.isSynced;
+    final activePatient = (appState.currentPatient?.id == patient.id || appState.currentPatient?.name == patient.name)
+        ? appState.currentPatient!
+        : appState.patients.firstWhere(
+            (p) => p.id == patient.id || (p.name == patient.name && p.phone == patient.phone),
+            orElse: () => patient,
+          );
+
+    final isSynced = activePatient.isSynced;
+    final isOnline = appState.isOnline;
 
     return Scaffold(
       backgroundColor: AppColors.primary,
@@ -86,7 +94,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        appState.translate('patient_id_label', args: {'id': patient.id}),
+                        appState.translate('patient_id_label', args: {'id': activePatient.id}),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -97,36 +105,56 @@ class RegistrationSuccessPage extends StatelessWidget {
 
                       const SizedBox(height: 16),
 
-                      // Offline / Online Status Badge
+                      // Offline / Online / Syncing Status Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isOnline
+                          color: (isOnline && isSynced)
                               ? Colors.white.withValues(alpha: 0.2)
-                              : const Color(0xFFFEF3C7).withValues(alpha: 0.95),
+                              : (isOnline && !isSynced)
+                                  ? const Color(0xFFE0F2FE).withValues(alpha: 0.95)
+                                  : const Color(0xFFFEF3C7).withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: isOnline ? Colors.white.withValues(alpha: 0.4) : const Color(0xFFFDE68A),
+                            color: (isOnline && isSynced)
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : (isOnline && !isSynced)
+                                    ? const Color(0xFFBAE6FD)
+                                    : const Color(0xFFFDE68A),
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              isOnline ? Icons.cloud_done_rounded : Icons.offline_pin_rounded,
+                              (isOnline && isSynced)
+                                  ? Icons.cloud_done_rounded
+                                  : (isOnline && !isSynced)
+                                      ? Icons.cloud_sync_rounded
+                                      : Icons.offline_pin_rounded,
                               size: 16,
-                              color: isOnline ? Colors.white : const Color(0xFF92400E),
+                              color: (isOnline && isSynced)
+                                  ? Colors.white
+                                  : (isOnline && !isSynced)
+                                      ? const Color(0xFF0369A1)
+                                      : const Color(0xFF92400E),
                             ),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                isOnline
+                                (isOnline && isSynced)
                                     ? appState.translate('reg_synced_desc')
-                                    : appState.translate('reg_offline_desc'),
+                                    : (isOnline && !isSynced)
+                                        ? appState.translate('reg_syncing_desc')
+                                        : appState.translate('reg_offline_desc'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
-                                  color: isOnline ? Colors.white : const Color(0xFF92400E),
+                                  color: (isOnline && isSynced)
+                                      ? Colors.white
+                                      : (isOnline && !isSynced)
+                                          ? const Color(0xFF0369A1)
+                                          : const Color(0xFF92400E),
                                 ),
                               ),
                             ),
@@ -148,7 +176,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                         child: Column(
                           children: [
                             Text(
-                              patient.name,
+                              activePatient.name,
                               style: const TextStyle(
                                 fontSize: 19,
                                 fontWeight: FontWeight.w800,
@@ -158,7 +186,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '${patient.age} yrs • ${patient.gender} • ${appState.translate('village_prefix', args: {'village': patient.village})}',
+                              '${activePatient.age} yrs • ${activePatient.gender} • ${appState.translate('village_prefix', args: {'village': activePatient.village})}',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -168,13 +196,13 @@ class RegistrationSuccessPage extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              appState.translate('phone_prefix', args: {'phone': patient.phone}),
+                              appState.translate('phone_prefix', args: {'phone': activePatient.phone}),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.white.withValues(alpha: 0.85),
                               ),
                             ),
-                            if (patient.abhaId != null && patient.abhaId!.isNotEmpty) ...[
+                            if (activePatient.abhaId != null && activePatient.abhaId!.isNotEmpty) ...[
                               const SizedBox(height: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -183,7 +211,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  appState.translate('abha_prefix', args: {'abha': patient.abhaId!}),
+                                  appState.translate('abha_prefix', args: {'abha': activePatient.abhaId!}),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
@@ -205,7 +233,7 @@ class RegistrationSuccessPage extends StatelessWidget {
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            appState.setCurrentPatient(patient);
+                            appState.setCurrentPatient(activePatient);
                             Navigator.pushNamed(context, '/ai-triage');
                           },
                           style: ElevatedButton.styleFrom(
