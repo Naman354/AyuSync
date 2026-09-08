@@ -14,7 +14,7 @@ class CaseStatusPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Referral Status'),
+        title: const Text('19 Case Status / Confirmation'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -38,22 +38,17 @@ class CaseStatusPage extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('AYUSYNC REFERRAL SLIP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
-                              const SizedBox(height: 2),
-                              Text(
-                                referral?.referralId ?? 'REF-889412',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('AYUSYNC DIGITAL REFERRAL SLIP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            const SizedBox(height: 2),
+                            Text(
+                              referral?.referralId ?? 'REF-889412',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -67,13 +62,13 @@ class CaseStatusPage extends StatelessWidget {
                     ),
                     const Divider(height: 24),
 
-                    _statusRow('Patient Name', referral?.patientName ?? patient?.name ?? 'Kamala Devi'),
+                    _statusRow('Citizen Name', referral?.patientName ?? patient?.name ?? 'Kamala Devi'),
                     const SizedBox(height: 8),
                     _statusRow('Village / Ward', patient?.village ?? 'Rampur Ward 3'),
                     const SizedBox(height: 8),
                     _statusRow('ABHA ID', patient?.abhaId ?? '91-4920-1123-9901'),
                     const SizedBox(height: 8),
-                    _statusRow('Main Health Problem', referral?.chiefComplaint ?? 'Severe pyrexia with breathlessness'),
+                    _statusRow('Chief Complaint', referral?.chiefComplaint ?? 'Severe pyrexia with breathlessness'),
                     const SizedBox(height: 8),
                     _statusRow('Assigned Facility', referral?.facility.name ?? 'Bilaspur PHC'),
                     const SizedBox(height: 8),
@@ -102,7 +97,7 @@ class CaseStatusPage extends StatelessWidget {
                         Icon(Icons.sync_alt, size: 18, color: Color(0xFF2563EB)),
                         SizedBox(width: 8),
                         Text(
-                          'Referral & Care Progress',
+                          'Closed-Loop Continuity Status',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -110,24 +105,24 @@ class CaseStatusPage extends StatelessWidget {
                     const SizedBox(height: 14),
 
                     _stepTimeline(
-                      title: '1. Referral Sent by Health Worker',
+                      title: '1. Upstream Referral Transmitted',
                       subtitle: 'Transmitted from ${appState.workerCenter}',
                       isDone: true,
                     ),
                     _stepTimeline(
-                      title: '2. Received at Doctor Dashboard',
-                      subtitle: 'Doctor notified at receiving health center',
+                      title: '2. Broadcasted to Doctor Live Queue',
+                      subtitle: 'Active on Doctor Dashboard (Socket.io Realtime)',
                       isDone: true,
                     ),
                     _stepTimeline(
-                      title: '3. Hospital / PHC Checkup',
+                      title: '3. Facility Consultation & Treatment',
                       subtitle: 'Patient en-route to ${referral?.facility.type ?? "Facility"}',
                       isDone: false,
                       isCurrent: true,
                     ),
                     _stepTimeline(
-                      title: '4. Doctor\'s Prescription & Follow-up Tasks',
-                      subtitle: 'Prescriptions and tasks will appear in your Follow-Up Tasks',
+                      title: '4. Downstream Counter-Referral',
+                      subtitle: 'Prescription & Follow-up tasks will route to 06 Follow-up Inbox',
                       isDone: false,
                     ),
                   ],
@@ -149,7 +144,7 @@ class CaseStatusPage extends StatelessWidget {
               },
               icon: const Icon(Icons.home),
               label: const Text(
-                'Return to Home Dashboard',
+                'Return to 03 Home Dashboard',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
@@ -160,7 +155,7 @@ class CaseStatusPage extends StatelessWidget {
                 Navigator.pushNamed(context, '/followup/inbox');
               },
               icon: const Icon(Icons.inbox),
-              label: const Text('View Follow-Up Tasks'),
+              label: const Text('Go to 06 Follow-up Inbox'),
             ),
           ],
         ),
@@ -170,20 +165,15 @@ class CaseStatusPage extends StatelessWidget {
 
   Widget _statusRow(String label, String value, {bool isUrgent = false}) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.end,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: isUrgent ? Colors.red : const Color(0xFF1E293B),
-            ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: isUrgent ? Colors.red : const Color(0xFF1E293B),
           ),
         ),
       ],

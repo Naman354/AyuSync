@@ -11,7 +11,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _idController = TextEditingController();
+  final _idController = TextEditingController(text: '+919998887776');
   final _passwordController = TextEditingController(text: 'password123');
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -24,48 +24,62 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() async {
+  Future<void> _handleLogin() async {
     if (_idController.text.trim().isEmpty ||
         _passwordController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your Mobile Number and Password')),
+        const SnackBar(content: Text('Please enter your ASHA Phone / ID and Password')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
     final appState = Provider.of<AppState>(context, listen: false);
-    await appState.login(_idController.text.trim(), _passwordController.text.trim());
+    final success = await appState.login(
+      _idController.text.trim(),
+      _passwordController.text.trim(),
+    );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (appState.lastErrorMessage != null) {
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(appState.lastErrorMessage!),
-          backgroundColor: Colors.orange.shade800,
+          content: Text('Welcome, ${appState.workerName}!'),
+          backgroundColor: AppColors.forest,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(appState.errorMessage ?? 'Invalid login credentials. Please try again.'),
+          backgroundColor: Colors.red.shade700,
         ),
       );
     }
-    Navigator.pushReplacementNamed(context, '/home');
   }
 
-  void _handleBiometricLogin() async {
+  Future<void> _handleBiometricLogin() async {
     setState(() => _isLoading = true);
     final appState = Provider.of<AppState>(context, listen: false);
 
-    await appState.login('9998887776', 'password123');
+    final success = await appState.login('+919998887776', 'password123');
     if (!mounted) return;
     setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Fingerprint Login Successful! Welcome, Sunita.'),
-        backgroundColor: AppColors.forest,
-        duration: Duration(seconds: 1),
-      ),
-    );
-    Navigator.pushReplacementNamed(context, '/home');
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Biometric Authentication Successful! Welcome, ${appState.workerName}.'),
+          backgroundColor: AppColors.forest,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      Navigator.pushReplacementNamed(context, '/home');
+    }
   }
 
   @override
@@ -171,7 +185,7 @@ class _LoginPageState extends State<LoginPage> {
                                 fontWeight: FontWeight.w500),
                             decoration: const InputDecoration(
                               border: InputBorder.none,
-                              hintText: 'Mobile No',
+                              hintText: 'example@example.com',
                               hintStyle: TextStyle(
                                   fontSize: 14, color: Color(0xFF94A3B8)),
                               isDense: true,

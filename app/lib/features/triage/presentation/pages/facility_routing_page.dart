@@ -12,27 +12,20 @@ class FacilityRoutingPage extends StatefulWidget {
 
 class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
   Facility? _selectedFacility;
-  bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
     final appState = Provider.of<AppState>(context, listen: false);
-    if (appState.facilities.isNotEmpty) {
-      _selectedFacility = appState.facilities.length > 1 ? appState.facilities[1] : appState.facilities.first;
-    }
+    _selectedFacility = appState.facilities[1]; // Default to PHC
   }
 
-  void _handleSubmitReferral() async {
-    setState(() => _isSubmitting = true);
+  void _handleSubmitReferral() {
     final appState = Provider.of<AppState>(context, listen: false);
     if (_selectedFacility != null) {
       appState.selectFacility(_selectedFacility!);
     }
-    await appState.submitReferralCaseAsync();
-
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
+    appState.submitReferralCase();
 
     // Navigate to 15 Case Submitted as per Figma flow
     Navigator.pushReplacementNamed(context, '/triage/case_submitted');
@@ -44,15 +37,10 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
     final facilities = appState.facilities;
     final urgency = appState.currentTriageResult?.confirmedUrgency ?? 'PRIORITY';
 
-    // Ensure selection defaults if empty
-    if (_selectedFacility == null && facilities.isNotEmpty) {
-      _selectedFacility = facilities.first;
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Choose Health Facility'),
+        title: const Text('14 Smart Facility Routing'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -69,19 +57,15 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                   children: [
                     const Icon(Icons.alt_route, color: Color(0xFF2563EB)),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Recommended Centers for $urgency Urgency',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    Text(
+                      'Routing Algorithm: $urgency Level Match',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Centers sorted by distance, available doctors, and current waiting time.',
+                  'Facilities ranked by live readiness, distance, and specialist availability.',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                 ),
               ],
@@ -151,28 +135,9 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                                   ],
                                 ),
                               ),
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected ? const Color(0xFF2563EB) : Colors.grey.shade400,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: isSelected
-                                    ? Center(
-                                        child: Container(
-                                          width: 12,
-                                          height: 12,
-                                          decoration: const BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Color(0xFF2563EB),
-                                          ),
-                                        ),
-                                      )
-                                    : null,
+                              Icon(
+                                isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                                color: isSelected ? const Color(0xFF2563EB) : Colors.grey,
                               ),
                             ],
                           ),
@@ -196,7 +161,7 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Status: ${fac.freshness}',
+                            'Freshness: ${fac.freshness}',
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                           ),
                         ],
@@ -228,23 +193,11 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              onPressed: (_selectedFacility == null || _isSubmitting) ? null : _handleSubmitReferral,
-              icon: _isSubmitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send_rounded),
-              label: Flexible(
-                child: Text(
-                  _isSubmitting
-                      ? 'Submitting Referral...'
-                      : 'Send Patient Referral to ${_selectedFacility?.type ?? "Facility"}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              onPressed: _selectedFacility == null ? null : _handleSubmitReferral,
+              icon: const Icon(Icons.send_rounded),
+              label: Text(
+                'Submit Referral Case to ${_selectedFacility?.type ?? "Facility"}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
           ),

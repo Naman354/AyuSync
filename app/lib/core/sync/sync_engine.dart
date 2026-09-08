@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import '../network/api_service.dart';
 import '../network/local_db.dart';
 
@@ -9,27 +9,27 @@ class SyncEngine {
   factory SyncEngine() => _instance;
   SyncEngine._internal();
 
-  final ApiService _apiService = ApiService();
+  bool _isSyncing = false;
+  bool get isSyncing => _isSyncing;
 
   Future<void> init() async {
-    Connectivity()
-        .onConnectivityChanged
-        .listen((List<ConnectivityResult> results) {
+    Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
       if (!results.contains(ConnectivityResult.none)) {
         syncNow();
       }
     });
   }
 
-  Future<void> queueMutation(
-    String id,
-    String entity,
-    String action,
-    Map<String, dynamic> payload,
-  ) async {
+  Future<void> queueMutation({
+    required String operationId,
+    required String entityId,
+    required String entity,
+    required String action,
+    required Map<String, dynamic> payload,
+  }) async {
     await LocalDatabase.instance.queueMutation({
-      'operationId': id,
-      'entityId': payload['id']?.toString() ?? id,
+      'operationId': operationId,
+      'entityId': entityId,
       'entity': entity,
       'operation': action,
       'payload': jsonEncode(payload),
@@ -38,16 +38,19 @@ class SyncEngine {
       'syncStatus': 'PENDING',
     });
 
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (!connectivityResult.contains(ConnectivityResult.none)) {
+    final connectivityResults = await Connectivity().checkConnectivity();
+    if (!connectivityResults.contains(ConnectivityResult.none)) {
       syncNow();
     }
   }
 
-  Future<void> syncNow() async {
-    final pending = await LocalDatabase.instance.getPendingMutations();
-    if (pending.isEmpty) return;
+  Future<bool> syncNow({String workerId = 'ASHA-WORKER-APP'}) async {
+    if (_isSyncing) return false;
 
+    final pending = await LocalDatabase.instance.getPendingSyncMutations();
+    if (pending.isEmpty) return true;
+
+    _isSyncing = true;
     try {
       final mutations = pending.map((p) {
         return {
@@ -55,35 +58,29 @@ class SyncEngine {
           'entity': p['entity'],
           'action': p['operation'],
           'payload': jsonDecode(p['payload'] as String),
-          'deviceId': 'flutter-mobile-client',
-          'timestamp': DateTime.now().toIso8601String(),
+          'timestamp': p['createdTime'],
         };
       }).toList();
 
-      final response = await _apiService.pushSyncBatch(
-        workerId: 'ASHA-CG-4902',
+      final result = await ApiService.instance.processSyncBatch(
+        workerId: workerId,
         mutations: mutations,
       );
 
-      if (response.isSuccess && response.data != null) {
-        final results = response.data!['results'] as List?;
-        if (results != null) {
-          for (var res in results) {
-            if (res is Map &&
-                (res['status'] == 'SUCCESS' || res['status'] == 'ALREADY_SYNCED')) {
-              final opId = res['operationId']?.toString();
-              if (opId != null) {
-                await LocalDatabase.instance.markMutationSynced(opId);
-              }
-              if (res['entityId'] != null) {
-                await LocalDatabase.instance.markPatientSynced(res['entityId'].toString());
-              }
-            }
+      if (result.containsKey('results')) {
+        for (var res in result['results']) {
+          if (res['status'] == 'SUCCESS' || res['status'] == 'ALREADY_SYNCED') {
+            await LocalDatabase.instance.markMutationSynced(res['operationId']);
           }
         }
+        await LocalDatabase.instance.clearSyncedMutations();
       }
+      return true;
     } catch (e) {
-      debugPrint('SyncEngine push failed: $e');
+      debugPrint('Sync error: $e');
+      return false;
+    } finally {
+      _isSyncing = false;
     }
   }
 }

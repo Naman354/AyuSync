@@ -54,8 +54,8 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
       SnackBar(
         content: Text(
           appState.isOnline
-              ? '✅ Follow-up visit updated and sent to doctor!'
-              : '💾 Follow-up visit saved offline. Will sync when online.',
+              ? '✅ Follow-up visit synced to Doctor Web Dashboard!'
+              : '💾 Follow-up visit recorded offline and queued in SQLite.',
         ),
         backgroundColor: Colors.green,
       ),
@@ -73,7 +73,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Record Follow-Up Visit'),
+        title: const Text('18 Record Follow-up Visit'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -116,8 +116,8 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                   side: BorderSide(color: Colors.grey.shade200),
                 ),
                 child: SwitchListTile(
-                  title: const Text('Medicine Routine Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Is the patient taking all prescribed medicines on time?'),
+                  title: const Text('Medication Adherence Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Is patient consuming prescribed medications on schedule?'),
                   value: _adherenceConfirmed,
                   activeThumbColor: const Color(0xFF2563EB),
                   onChanged: (val) => setState(() => _adherenceConfirmed = val),
@@ -126,7 +126,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               const SizedBox(height: 16),
 
               // Follow-up Vitals
-              const Text('Vitals Recorded Today', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text('Follow-up Vitals Recorded', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -175,7 +175,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                 controller: _notesController,
                 maxLines: 4,
                 decoration: const InputDecoration(
-                  labelText: 'Visit Notes & Patient Condition *',
+                  labelText: 'ASHA Home Visit Observations *',
                   hintText: 'Describe patient recovery, symptoms, and advice given...',
                   prefixIcon: Icon(Icons.note_alt_outlined),
                   border: OutlineInputBorder(),
