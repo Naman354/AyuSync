@@ -108,10 +108,9 @@ const ProtectedRoute = () => {
               </>
             ) : (
               <>
-                <NavLink to="/dashboard" exact><LayoutDashboard size={15} />Home</NavLink>
-                <NavLink to="/queue"><Clock size={15} />Consultation Queue</NavLink>
-                <NavLink to="/followups"><AlertTriangle size={15} />Care Continuity</NavLink>
-                <NavLink to="/patients"><Users size={15} />Patient Records</NavLink>
+                <NavLink to="/dashboard" exact><LayoutDashboard size={15} />Dashboard</NavLink>
+                <NavLink to="/queue"><Clock size={15} />Queue</NavLink>
+                <NavLink to="/patients"><Users size={15} />Patients</NavLink>
                 <NavLink to="/facilities"><Building2 size={15} />Clinic Status</NavLink>
               </>
             )}
@@ -122,14 +121,13 @@ const ProtectedRoute = () => {
             {/* Prominent Demo Role Switcher */}
             <button
               onClick={switchRole}
-              title="Click to switch between Doctor and Village Health Worker roles"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs text-gray-700 shadow-sm transition-all hover:border-[#1e6641]/50"
+              title="Click to switch role (Doctor / ASHA Health Worker / Patient)"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs text-gray-700 shadow-xs transition-all hover:border-[#1e6641]/50"
             >
-              <span className="hidden sm:inline text-gray-500">Role:</span>
               <span className="font-semibold text-[#1e6641] flex items-center gap-1">
-                {isWorker ? '👩‍⚕️ Health Worker (ASHA)' : isPatient ? '🧑 Patient' : '👨‍⚕️ Doctor (MO)'}
+                {isWorker ? '👩‍⚕️ ASHA' : isPatient ? '🧑 Patient' : '👨‍⚕️ Doctor'}
               </span>
-              <RefreshCw size={11} className="text-gray-400 ml-0.5" />
+              <RefreshCw size={10} className="text-gray-400 ml-0.5" />
             </button>
 
             {/* + New Patient (worker only, persistent CTA) */}
@@ -206,9 +204,9 @@ const ProtectedRoute = () => {
               <Clock size={18} />
               <span>Queue</span>
             </Link>
-            <Link to="/followups" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
-              <AlertTriangle size={18} />
-              <span>Continuity</span>
+            <Link to="/facilities" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+              <Building2 size={18} />
+              <span>Clinic</span>
             </Link>
             <Link to="/patients" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
               <Users size={18} />

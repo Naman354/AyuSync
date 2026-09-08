@@ -130,3 +130,31 @@ export const updateReferralStatus = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+export const getReferrals = async (req: Request, res: Response) => {
+  try {
+    const { status, destinationId } = req.query;
+    const where: any = {};
+    if (status && typeof status === 'string') {
+      where.status = status;
+    }
+    if (destinationId && typeof destinationId === 'string') {
+      where.destinationId = destinationId;
+    }
+    const referrals = await prisma.referral.findMany({
+      where,
+      include: {
+        patient: true,
+        origin: true,
+        destination: true,
+        events: { orderBy: { createdAt: 'desc' }, take: 1 }
+      },
+      take: 50
+    });
+    res.json(referrals);
+  } catch (error) {
+    console.error('Error fetching referrals:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+

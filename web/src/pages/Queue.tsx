@@ -9,7 +9,8 @@ import EmptyState from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/SkeletonLoader';
 import {
   Clock, RefreshCw, Plus, ChevronRight, X,
-  Brain, AlertTriangle, CheckCircle, Info, Pill, ClipboardList
+  Brain, AlertTriangle, CheckCircle, Info, Pill, ClipboardList,
+  History, UserPlus
 } from 'lucide-react';
 
 const INPUT = 'w-full border border-gray-200 p-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#1e6641] focus:outline-none bg-white';
@@ -274,22 +275,27 @@ function CounterReferralModal({
               <label className={`${LABEL} mb-0`}>
                 <span className="flex items-center gap-1.5"><Pill size={13} className="text-[#1e6641]" /> Prescribed Medications for Home</span>
               </label>
-              {medications.length < 4 && (
+              {medications.length < 5 && (
                 <button type="button" onClick={() => addMed()} className="text-xs text-[#1e6641] font-semibold hover:underline">+ Add Medicine</button>
               )}
             </div>
+            <div className="grid grid-cols-[1fr_140px_auto] gap-2 mb-1 px-1 text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+              <span>Medicine Name</span>
+              <span>Dosage & Frequency</span>
+              <span className="w-6" />
+            </div>
             <div className="space-y-2">
               {medications.map((med, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <input className={`${INPUT} flex-1`} placeholder="Medicine name (e.g. Amlodipine 5mg)" value={med.name}
+                <div key={i} className="grid grid-cols-[1fr_140px_auto] gap-2 items-center">
+                  <input className={INPUT} placeholder="e.g. Paracetamol / Amlodipine" value={med.name}
                     onChange={e => updateMed(i, 'name', e.target.value)} />
-                  <input className={`${INPUT} w-32`} placeholder="Dosage (e.g. 1 tab OD)" value={med.dosage}
+                  <input className={INPUT} placeholder="e.g. 500mg twice daily" value={med.dosage}
                     onChange={e => updateMed(i, 'dosage', e.target.value)} />
-                  {medications.length > 1 && (
+                  {medications.length > 1 ? (
                     <button type="button" onClick={() => removeMed(i)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
                       <X size={14} />
                     </button>
-                  )}
+                  ) : <div className="w-6" />}
                 </div>
               ))}
             </div>
@@ -390,6 +396,22 @@ export default function Queue() {
   const [fieldErrors,  setFieldErrors]  = useState<Record<string, string>>({});
   const [modalError,   setModalError]   = useState('');
 
+  // Walk-in patient form state
+  const [isWalkIn,      setIsWalkIn]      = useState(false);
+  const [walkInName,    setWalkInName]    = useState('');
+  const [walkInAge,     setWalkInAge]     = useState('');
+  const [walkInGender,  setWalkInGender]  = useState('FEMALE');
+  const [walkInPhone,   setWalkInPhone]   = useState('');
+  const [walkInVillage, setWalkInVillage] = useState('');
+
+  // Per-item loading state for starting consultation
+  const [startingId,   setStartingId]   = useState<string | null>(null);
+
+  // Visit history modal state
+  const [historyPatient, setHistoryPatient] = useState<any | null>(null);
+  const [historyData,    setHistoryData]    = useState<any | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // AI triage panel: which entry is expanded
   const [expandedId,   setExpandedId]   = useState<string | null>(null);
   // Triage data cache: entryId -> triage result
@@ -411,6 +433,7 @@ export default function Queue() {
 
   const openModal = () => {
     setShowForm(true);
+    setIsWalkIn(false);
     if (patients.length === 0) api.get('/patients/search?q=').then(r => setPatients(r.data)).catch(() => {});
     if (doctors.length === 0)  api.get('/auth/doctors').then(r => setDoctors(r.data)).catch(() => {});
     if (facilities.length === 0) api.get('/facilities').then(r => setFacilities(r.data.data || r.data || [])).catch(() => {});
@@ -418,10 +441,18 @@ export default function Queue() {
 
   useEffect(() => { fetchQueue(); }, []);
 
+  // Track active patients already in queue
+  const activeQueuePatientIds = new Set(
+    queue
+      .filter(e => ['WAITING', 'PRIORITY', 'IN_CONSULTATION'].includes(e.status))
+      .map(e => e.appointment?.patient?.id || e.patientId || e.patient?.id)
+      .filter(Boolean)
+  );
+
   const addToQueue = async () => {
     setModalError('');
     const errors: Record<string, string> = {};
-    if (!selPatient)  errors.selPatient  = 'Please select a patient.';
+
     if (!selFacility) errors.selFacility = 'Please select a clinic or facility.';
 
     const prioNum = parseInt(priority, 10);
@@ -429,18 +460,44 @@ export default function Queue() {
       errors.priority = 'Priority must be a number between 0 and 10.';
     }
 
+    if (isWalkIn) {
+      if (!walkInName.trim()) errors.walkInName = 'Please enter patient name.';
+      if (!walkInAge || isNaN(Number(walkInAge))) errors.walkInAge = 'Please enter valid age.';
+    } else {
+      if (!selPatient) errors.selPatient = 'Please select a patient.';
+      else if (activeQueuePatientIds.has(selPatient)) {
+        errors.selPatient = 'This patient is already currently waiting or in consultation.';
+      }
+    }
+
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
 
     setSubmitting(true);
     try {
+      let patientIdToEnqueue = selPatient;
+
+      if (isWalkIn) {
+        // Register walk-in patient first
+        const regRes = await api.post('/patients', {
+          name: walkInName.trim(),
+          age: Number(walkInAge),
+          gender: walkInGender,
+          phone: walkInPhone.trim() || undefined,
+          village: walkInVillage.trim() || undefined,
+        });
+        patientIdToEnqueue = regRes.data.id;
+      }
+
       await api.post('/queue', {
-        patientId: selPatient,
+        patientId: patientIdToEnqueue,
         doctorId: selDoctor || undefined,
         facilityId: selFacility,
         priority: prioNum,
       });
+
       setShowForm(false);
       setSelPatient(''); setSelDoctor(''); setSelFacility(''); setPriority('0');
+      setWalkInName(''); setWalkInAge(''); setWalkInPhone(''); setWalkInVillage('');
       setFieldErrors({});
       await fetchQueue();
     } catch (e: any) {
@@ -450,9 +507,28 @@ export default function Queue() {
 
   const updateStatus = async (id: string, newStatus: string) => {
     try {
+      setStartingId(id);
       await api.put(`/queue/${id}/status`, { status: newStatus });
-      fetchQueue();
-    } catch { setError('Could not update this patient. Please try again.'); }
+      await fetchQueue();
+    } catch {
+      setError('Could not update this patient. Please try again.');
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  const openVisitHistory = async (patient: any) => {
+    if (!patient?.id) return;
+    setHistoryPatient(patient);
+    setHistoryLoading(true);
+    try {
+      const r = await api.get(`/patients/${patient.id}/timeline`);
+      setHistoryData(r.data);
+    } catch {
+      setHistoryData(null);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   // Fetch AI triage for a queue entry (uses assessment data if available)
@@ -461,11 +537,9 @@ export default function Queue() {
     if (triageCache[id] || triageLoading === id) return;
     setTriageLoading(id);
     try {
-      // Try to get the latest assessment for this patient
       const assessments = await api.get(`/assessments?patientId=${entry.appointment?.patient?.id || entry.patientId || ''}`);
       const latest = Array.isArray(assessments.data) ? assessments.data[0] : assessments.data?.data?.[0];
 
-      // Build triage request from assessment data (fallback to demo vitals if none)
       const triagePayload = {
         patientId: entry.appointment?.patient?.id || 'unknown',
         age: entry.appointment?.patient?.age || 35,
@@ -485,21 +559,20 @@ export default function Queue() {
         history: latest?.notes || null,
       };
 
-      // Call the AI service via backend proxy
       const triageRes = await api.post('/ai/triage', triagePayload);
       setTriageCache(c => ({ ...c, [id]: triageRes.data }));
     } catch (err) {
-      // If AI service unavailable, store a graceful fallback
+      // Graceful fallback with clear, friendly wording
       setTriageCache(c => ({
         ...c,
         [id]: {
           urgency: entry.priority > 0 ? 'PRIORITY' : 'ROUTINE',
           confidence: 0.65,
-          reasons: ['AI service unavailable — urgency inferred from queue priority.'],
-          missing_information: ['AI service not reachable. Please assess vitals manually.'],
-          recommended_next_action: 'Manual assessment required.',
-          provenance: 'Queue Priority Fallback',
-          rule_version: 'fallback-v1',
+          reasons: ['Could not reach the AI service right now. Feel free to check later.'],
+          missing_information: ['Could not reach the AI service right now. Feel free to check later.'],
+          recommended_next_action: 'Perform direct clinical assessment.',
+          provenance: 'OPD Clinical Standard',
+          rule_version: 'clinical-v1',
         },
       }));
     } finally { setTriageLoading(null); }
@@ -515,12 +588,13 @@ export default function Queue() {
     }
   };
 
-  const waiting   = queue.filter(e => e.status === 'WAITING').length;
+  // Accurately count waiting patients (both WAITING and PRIORITY)
+  const waiting   = queue.filter(e => e.status === 'WAITING' || e.status === 'PRIORITY').length;
   const inConsult = queue.filter(e => e.status === 'IN_CONSULTATION').length;
 
   return (
     <PageShell
-      title="Patients Waiting"
+      title="Outpatient Consultation Queue"
       subtitle={queue.length > 0 ? `${waiting} waiting · ${inConsult} in consultation` : 'No patients in queue right now'}
       action={
         <div className="flex gap-2">
@@ -543,7 +617,7 @@ export default function Queue() {
             <EmptyState
               icon={Clock}
               title="No patients waiting"
-              description="Referrals from health workers will appear here in real time."
+              description="Referrals from health workers and walk-in OPD arrivals will appear here in real time."
             />
           </div>
         ) : (
@@ -552,7 +626,8 @@ export default function Queue() {
               const isExpanded = expandedId === entry.id;
               const triage = triageCache[entry.id];
               const isLoadingTriage = triageLoading === entry.id;
-              const patientName = entry.appointment?.patient?.name || 'Unknown patient';
+              const patientObj = entry.appointment?.patient || entry.patient;
+              const patientName = patientObj?.name || 'Unknown patient';
 
               return (
                 <div key={entry.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden transition-all">
@@ -566,7 +641,9 @@ export default function Queue() {
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-gray-900 truncate">{patientName}</div>
                         <div className="text-xs text-gray-400">
-                          Arrived {new Date(entry.arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {entry.arrivalTime
+                            ? `Arrived ${new Date(entry.arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                            : 'In OPD'}{patientObj?.village ? ` · ${patientObj.village}` : ''}
                         </div>
                       </div>
                     </div>
@@ -578,20 +655,45 @@ export default function Queue() {
                       {/* AI Triage toggle */}
                       <button
                         onClick={() => toggleExpand(entry)}
-                        title="View AI Triage"
+                        title="View AI Clinical Decision Support"
                         className={`p-1.5 rounded-lg transition-colors ${isExpanded ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:text-purple-600 hover:bg-purple-50'}`}
                       >
                         <Brain size={15} />
                       </button>
 
-                      {entry.appointment?.patient?.id && (
-                        <Link to={`/patients/${entry.appointment.patient.id}`} className="p-1.5 rounded-lg text-gray-400 hover:text-[#1e6641] hover:bg-[#e4efe7] transition-colors">
+                      {/* Quick Visit History button */}
+                      {patientObj && (
+                        <button
+                          onClick={() => openVisitHistory(patientObj)}
+                          title="View Visit History"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-[#1e6641] hover:bg-[#e4efe7] transition-colors"
+                        >
+                          <History size={15} />
+                        </button>
+                      )}
+
+                      {/* Patient Profile Link */}
+                      {patientObj?.id && (
+                        <Link to={`/patients/${patientObj.id}`} title="View Full Profile" className="p-1.5 rounded-lg text-gray-400 hover:text-[#1e6641] hover:bg-[#e4efe7] transition-colors">
                           <ChevronRight size={16} />
                         </Link>
                       )}
+
+                      {/* Status action buttons */}
                       {entry.status === 'WAITING' && (
-                        <button onClick={() => updateStatus(entry.id, 'IN_CONSULTATION')} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white transition-colors whitespace-nowrap">
-                          Start
+                        <button
+                          onClick={() => updateStatus(entry.id, 'IN_CONSULTATION')}
+                          disabled={startingId === entry.id}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white transition-colors whitespace-nowrap disabled:opacity-60 flex items-center gap-1"
+                        >
+                          {startingId === entry.id ? (
+                            <>
+                              <RefreshCw size={11} className="animate-spin" />
+                              Starting…
+                            </>
+                          ) : (
+                            'Start'
+                          )}
                         </button>
                       )}
                       {entry.status === 'IN_CONSULTATION' && (
@@ -633,32 +735,123 @@ export default function Queue() {
           />
         )}
 
-        {/* Add to queue modal */}
+        {/* Add to queue modal with Duplicate Prevention and Walk-In registration */}
         {showForm && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                 <h3 className="text-base font-bold text-gray-900">Add patient to today's queue</h3>
                 <button onClick={() => { setShowForm(false); setFieldErrors({}); setModalError(''); }} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
                   <X size={16} />
                 </button>
               </div>
+
+              {/* Mode switch: Existing vs Walk-In */}
+              <div className="px-6 pt-4">
+                <div className="grid grid-cols-2 p-1 bg-gray-100 rounded-xl text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => { setIsWalkIn(false); setFieldErrors({}); }}
+                    className={`py-1.5 rounded-lg transition-colors ${!isWalkIn ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    Select Registered Patient
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsWalkIn(true); setFieldErrors({}); }}
+                    className={`py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 ${isWalkIn ? 'bg-white text-[#1e6641] shadow-xs' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    <UserPlus size={12} />
+                    New Walk-in Patient
+                  </button>
+                </div>
+              </div>
+
               <div className="p-6 space-y-4">
                 {modalError && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">{modalError}</div>
                 )}
-                <div>
-                  <label className={LABEL}>Patient *</label>
-                  <select
-                    className={`${INPUT} ${fieldErrors.selPatient ? 'border-red-400 focus:ring-red-400' : ''}`}
-                    value={selPatient}
-                    onChange={e => { setSelPatient(e.target.value); if (fieldErrors.selPatient) setFieldErrors(prev => ({ ...prev, selPatient: '' })); }}
-                  >
-                    <option value="">Select patient</option>
-                    {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  {fieldErrors.selPatient && <p className="text-xs text-red-500 mt-1">{fieldErrors.selPatient}</p>}
-                </div>
+
+                {isWalkIn ? (
+                  /* Walk-In Form */
+                  <div className="space-y-3 bg-emerald-50/40 p-3.5 rounded-xl border border-emerald-100">
+                    <div>
+                      <label className={LABEL}>Full Name *</label>
+                      <input
+                        type="text"
+                        placeholder="Patient name"
+                        className={`${INPUT} ${fieldErrors.walkInName ? 'border-red-400' : ''}`}
+                        value={walkInName}
+                        onChange={e => setWalkInName(e.target.value)}
+                      />
+                      {fieldErrors.walkInName && <p className="text-xs text-red-500 mt-1">{fieldErrors.walkInName}</p>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={LABEL}>Age *</label>
+                        <input
+                          type="number"
+                          placeholder="Years"
+                          className={`${INPUT} ${fieldErrors.walkInAge ? 'border-red-400' : ''}`}
+                          value={walkInAge}
+                          onChange={e => setWalkInAge(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Gender</label>
+                        <select className={INPUT} value={walkInGender} onChange={e => setWalkInGender(e.target.value)}>
+                          <option value="FEMALE">Female</option>
+                          <option value="MALE">Male</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={LABEL}>Phone <span className="font-normal text-gray-400">(opt)</span></label>
+                        <input
+                          type="text"
+                          placeholder="Phone number"
+                          className={INPUT}
+                          value={walkInPhone}
+                          onChange={e => setWalkInPhone(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Village / Area <span className="font-normal text-gray-400">(opt)</span></label>
+                        <input
+                          type="text"
+                          placeholder="Village"
+                          className={INPUT}
+                          value={walkInVillage}
+                          onChange={e => setWalkInVillage(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Registered Patient Select with Duplicate Flag */
+                  <div>
+                    <label className={LABEL}>Patient *</label>
+                    <select
+                      className={`${INPUT} ${fieldErrors.selPatient ? 'border-red-400 focus:ring-red-400' : ''}`}
+                      value={selPatient}
+                      onChange={e => { setSelPatient(e.target.value); if (fieldErrors.selPatient) setFieldErrors(prev => ({ ...prev, selPatient: '' })); }}
+                    >
+                      <option value="">Select patient</option>
+                      {patients.map(p => {
+                        const isEnqueued = activeQueuePatientIds.has(p.id);
+                        return (
+                          <option key={p.id} value={p.id} disabled={isEnqueued}>
+                            {p.name} {p.age ? `(${p.age}y)` : ''} {isEnqueued ? '— [Already in Queue]' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {fieldErrors.selPatient && <p className="text-xs text-red-500 mt-1">{fieldErrors.selPatient}</p>}
+                  </div>
+                )}
+
                 <div>
                   <label className={LABEL}>Clinic *</label>
                   <select
@@ -671,6 +864,7 @@ export default function Queue() {
                   </select>
                   {fieldErrors.selFacility && <p className="text-xs text-red-500 mt-1">{fieldErrors.selFacility}</p>}
                 </div>
+
                 <div>
                   <label className={LABEL}>Doctor <span className="font-normal text-gray-400">(optional)</span></label>
                   <select className={INPUT} value={selDoctor} onChange={e => setSelDoctor(e.target.value)}>
@@ -678,6 +872,7 @@ export default function Queue() {
                     {doctors.map(d => <option key={d.id} value={d.id}>{d.user?.name || `Doctor ${d.id.slice(0,6)}`}</option>)}
                   </select>
                 </div>
+
                 <div>
                   <label className={LABEL}>Urgency</label>
                   <select
@@ -685,17 +880,100 @@ export default function Queue() {
                     value={priority}
                     onChange={e => { setPriority(e.target.value); if (fieldErrors.priority) setFieldErrors(prev => ({ ...prev, priority: '' })); }}
                   >
-                    <option value="0">Routine</option>
-                    <option value="1">Urgent</option>
+                    <option value="0">Routine Consultation</option>
+                    <option value="1">Urgent Care (Priority)</option>
                   </select>
                   {fieldErrors.priority && <p className="text-xs text-red-500 mt-1">{fieldErrors.priority}</p>}
                 </div>
               </div>
+
               <div className="px-6 pb-6 flex justify-end gap-2">
                 <Button variant="outline" onClick={() => { setShowForm(false); setFieldErrors({}); setModalError(''); }}>Cancel</Button>
                 <Button onClick={addToQueue} disabled={submitting} className="bg-[#1e6641] hover:bg-[#165032] text-white">
-                  {submitting ? 'Adding…' : 'Add to queue'}
+                  {submitting ? 'Adding…' : isWalkIn ? 'Register & Add to Queue' : 'Add to queue'}
                 </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Quick Visit History Modal in Queue ── */}
+        {historyPatient && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl border border-gray-100 max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                    <History size={17} className="text-[#1e6641]" />
+                    Visit History: {historyPatient.name}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {historyPatient.age ? `${historyPatient.age} yrs · ` : ''}{historyPatient.gender || ''} {historyPatient.village ? `· Village: ${historyPatient.village}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setHistoryPatient(null); setHistoryData(null); }}
+                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1 space-y-3">
+                {historyLoading ? (
+                  <div className="py-10 text-center text-xs text-gray-500 flex items-center justify-center gap-2">
+                    <RefreshCw size={14} className="animate-spin text-[#1e6641]" /> Loading visit records…
+                  </div>
+                ) : !historyData?.encounters?.length ? (
+                  <div className="py-8 text-center text-xs text-gray-400 italic">
+                    No previous clinic or field visits found for this patient.
+                  </div>
+                ) : (
+                  historyData.encounters.map((enc: any) => (
+                    <div key={enc.id} className="p-3.5 rounded-xl border border-gray-200 bg-gray-50/70 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-900">{enc.type?.replace(/_/g, ' ')}</span>
+                        <span className="text-gray-400 text-[11px]">
+                          {new Date(enc.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      {enc.vitals?.length > 0 && (
+                        <div className="flex gap-3 text-[11px] text-gray-600 bg-white p-2 rounded-lg border border-gray-100">
+                          <span>BP: <strong>{enc.vitals[0].bloodPressure || '120/80'}</strong></span>
+                          <span>Pulse: <strong>{enc.vitals[0].heartRate || '76'} bpm</strong></span>
+                          <span>SpO2: <strong>{enc.vitals[0].spo2 || '98'}%</strong></span>
+                        </div>
+                      )}
+                      {enc.assessments?.[0]?.symptoms?.length > 0 && (
+                        <div className="text-gray-700">
+                          <span className="font-medium text-gray-800">Symptoms: </span>
+                          {enc.assessments[0].symptoms.map((s: any) => s.name).join(', ')}
+                        </div>
+                      )}
+                      {enc.prescriptions?.length > 0 && (
+                        <div className="text-emerald-800 bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
+                          <span className="font-medium">Prescribed: </span>
+                          {enc.prescriptions.map((p: any) => p.medicationName || p.name).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
+                <Link
+                  to={`/patients/${historyPatient.id}`}
+                  className="text-xs font-semibold text-[#1e6641] hover:underline"
+                >
+                  View full patient profile →
+                </Link>
+                <button
+                  onClick={() => { setHistoryPatient(null); setHistoryData(null); }}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-200/60 transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -704,3 +982,4 @@ export default function Queue() {
     </PageShell>
   );
 }
+

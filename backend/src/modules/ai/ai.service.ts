@@ -15,7 +15,7 @@ export const analyzeAssessment = async (assessmentId: string, doctorId: string, 
     if (!assessment) return;
 
     let urgencyCategory = 'ROUTINE';
-    let reasons = ['System fallback due to AI timeout or service unavailability'];
+    let reasons = ['Could not reach the AI service right now. Feel free to check later.'];
     let confidence = 0.5;
 
     try {

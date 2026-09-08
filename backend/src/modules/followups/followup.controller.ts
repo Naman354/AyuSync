@@ -73,108 +73,122 @@ export const createCounterReferral = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'referralId is required' });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Fetch referral or resolve queue entry / patient
-      let referral = await tx.referral.findUnique({
+    // 1. Fetch referral or resolve queue entry / patient
+    let referral = await prisma.referral.findUnique({
+      where: { id: referralId },
+      include: { patient: true }
+    });
+
+    let targetPatientId = referral?.patientId;
+
+    // If referralId was actually a QueueEntry ID
+    if (!referral) {
+      const qEntry = await prisma.queueEntry.findUnique({
         where: { id: referralId },
-        include: { patient: true }
+        include: { appointment: { include: { patient: true } } }
       });
 
-      let targetPatientId = referral?.patientId;
+      if (qEntry && qEntry.appointment) {
+        targetPatientId = qEntry.appointment.patientId;
 
-      // If referralId was actually a QueueEntry ID
-      if (!referral) {
-        const qEntry = await tx.queueEntry.findUnique({
-          where: { id: referralId },
-          include: { appointment: { include: { patient: true } } }
-        });
-
-        if (qEntry && qEntry.appointment) {
-          targetPatientId = qEntry.appointment.patientId;
-
-          // Check if patient already has an active referral
-          referral = await tx.referral.findFirst({
-            where: { patientId: targetPatientId },
-            include: { patient: true }
-          });
-
-          // Mark queue entry as COMPLETED
-          await tx.queueEntry.update({
-            where: { id: qEntry.id },
-            data: { status: 'COMPLETED' }
-          }).catch(() => {});
-        }
-      }
-
-      // If still not found, check if referralId was directly a patientId
-      if (!referral && !targetPatientId) {
-        const pat = await tx.patient.findUnique({ where: { id: referralId } });
-        if (pat) targetPatientId = pat.id;
-      }
-
-      // If no referral exists, auto-create one so counter-referral FK is satisfied
-      if (!referral && targetPatientId) {
-        // Find default facilities
-        const facs = await tx.facility.findMany({ take: 2 });
-        const originId = facs[1]?.id || facs[0]?.id || 'fac-khandala-phc';
-        const destinationId = facs[0]?.id || 'fac-baramati-chc';
-
-        referral = await tx.referral.create({
-          data: {
-            patientId: targetPatientId,
-            originId,
-            destinationId,
-            reason: outcome || 'Consultation referral',
-            urgency: 'ROUTINE',
-            status: 'COUNTER_REFERRED'
-          },
+        // Check if patient already has an active referral
+        referral = await prisma.referral.findFirst({
+          where: { patientId: targetPatientId },
           include: { patient: true }
         });
-      }
 
-      if (!referral) {
-        throw new Error(`Referral or patient for ${referralId} could not be resolved`);
+        // Mark queue entry as COMPLETED
+        await prisma.queueEntry.update({
+          where: { id: qEntry.id },
+          data: { status: 'COMPLETED' }
+        }).catch(() => {});
       }
+    }
 
-      // 2. Create or upsert CounterReferral record
-      const counter = await tx.counterReferral.upsert({
-        where: { referralId: referral.id },
-        update: {
-          outcome: outcome || 'Consultation completed',
-          treatment: treatment || '',
-          instructions: instructions || '',
-          requiresFollowUp: tasks.length > 0 || requiresFollowUp || false,
+    // If still not found, check if referralId was directly a patientId
+    if (!referral && !targetPatientId) {
+      const pat = await prisma.patient.findUnique({ where: { id: referralId } });
+      if (pat) targetPatientId = pat.id;
+    }
+
+    // If no referral exists, auto-create one so counter-referral FK is satisfied
+    if (!referral && targetPatientId) {
+      // Find default facilities
+      const facs = await prisma.facility.findMany({ take: 2 });
+      const originId = facs[1]?.id || facs[0]?.id || 'fac-khandala-phc';
+      const destinationId = facs[0]?.id || 'fac-baramati-chc';
+
+      referral = await prisma.referral.create({
+        data: {
+          patientId: targetPatientId,
+          originId,
+          destinationId,
+          reason: outcome || 'Consultation referral',
+          urgency: 'ROUTINE',
+          status: 'COUNTER_REFERRED'
         },
-        create: {
-          referralId: referral.id,
-          outcome: outcome || 'Consultation completed',
-          treatment: treatment || '',
-          instructions: instructions || '',
-          requiresFollowUp: tasks.length > 0 || requiresFollowUp || false,
-        }
+        include: { patient: true }
       });
+    }
 
-      // 3. Mark referral as COUNTER_REFERRED
-      await tx.referral.update({
-        where: { id: referral.id },
-        data: { status: 'COUNTER_REFERRED' }
-      }).catch(() => {});
+    if (!referral) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: `Referral or patient for ${referralId} could not be resolved`
+      });
+    }
 
-      // 4. Resolve worker for tasks
-      let workerIdForTasks = assignedWorkerId;
-      if (!workerIdForTasks) {
-        const defaultWorker = await tx.worker.findFirst();
-        workerIdForTasks = defaultWorker?.id;
+    // 2. Create or upsert CounterReferral record
+    const counter = await prisma.counterReferral.upsert({
+      where: { referralId: referral.id },
+      update: {
+        outcome: outcome || 'Consultation completed',
+        treatment: treatment || '',
+        instructions: instructions || '',
+        requiresFollowUp: tasks.length > 0 || requiresFollowUp || false,
+      },
+      create: {
+        referralId: referral.id,
+        outcome: outcome || 'Consultation completed',
+        treatment: treatment || '',
+        instructions: instructions || '',
+        requiresFollowUp: tasks.length > 0 || requiresFollowUp || false,
       }
+    });
 
-      // 5. Create structured FollowUp tasks
-      const createdFollowUps: any[] = [];
-      for (const task of tasks.slice(0, 3)) {
-        if (!task.title) continue;
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + (task.dueInDays || 3));
+    // 3. Mark referral as COUNTER_REFERRED
+    await prisma.referral.update({
+      where: { id: referral.id },
+      data: { status: 'COUNTER_REFERRED' }
+    }).catch(() => {});
 
-        const followUp = await tx.followUp.create({
+    // Also mark any associated active queue entry for this patient as COMPLETED
+    if (referral.patientId) {
+      await prisma.queueEntry.updateMany({
+        where: {
+          appointment: { patientId: referral.patientId },
+          status: { in: ['WAITING', 'IN_CONSULTATION', 'PRIORITY'] }
+        },
+        data: { status: 'COMPLETED' }
+      }).catch(() => {});
+    }
+
+    // 4. Resolve worker for tasks
+    let workerIdForTasks = assignedWorkerId;
+    if (!workerIdForTasks) {
+      const defaultWorker = await prisma.worker.findFirst();
+      workerIdForTasks = defaultWorker?.id;
+    }
+
+    // 5. Create structured FollowUp tasks
+    const createdFollowUps: any[] = [];
+    for (const task of tasks.slice(0, 4)) {
+      if (!task.title) continue;
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + (task.dueInDays || 3));
+
+      try {
+        const followUp = await prisma.followUp.create({
           data: {
             patientId: referral.patientId,
             workerId: workerIdForTasks || undefined,
@@ -188,11 +202,15 @@ export const createCounterReferral = async (req: Request, res: Response) => {
           include: { patient: { select: { name: true, id: true } } }
         });
         createdFollowUps.push(followUp);
+      } catch (fuErr) {
+        console.warn('[CounterReferral] FollowUp create warning:', fuErr);
       }
+    }
 
-      // Legacy single follow-up support
-      if (requiresFollowUp && followUpDate && tasks.length === 0) {
-        const followUp = await tx.followUp.create({
+    // Legacy single follow-up support
+    if (requiresFollowUp && followUpDate && tasks.length === 0) {
+      try {
+        const followUp = await prisma.followUp.create({
           data: {
             patientId: referral.patientId,
             workerId: workerIdForTasks || undefined,
@@ -203,11 +221,15 @@ export const createCounterReferral = async (req: Request, res: Response) => {
           include: { patient: { select: { name: true, id: true } } }
         });
         createdFollowUps.push(followUp);
+      } catch (fuErr) {
+        console.warn('[CounterReferral] Single FollowUp create warning:', fuErr);
       }
+    }
 
-      // 6. Send in-app notification
-      if (workerIdForTasks) {
-        const worker = await tx.worker.findUnique({ where: { id: workerIdForTasks } });
+    // 6. Send in-app notification safely
+    if (workerIdForTasks) {
+      try {
+        const worker = await prisma.worker.findUnique({ where: { id: workerIdForTasks } });
         if (worker) {
           await createNotification(
             worker.userId,
@@ -215,10 +237,12 @@ export const createCounterReferral = async (req: Request, res: Response) => {
             `Doctor assigned ${createdFollowUps.length} follow-up task(s) for patient ${referral.patient?.name || referral.patientId}`
           );
         }
+      } catch (notifErr) {
+        console.warn('[CounterReferral] Notification non-critical warning:', notifErr);
       }
+    }
 
-      return { counter, followUps: createdFollowUps, referral };
-    });
+    const result = { counter, followUps: createdFollowUps, referral };
 
     // 7. Broadcast real-time event via Socket.io
     try {

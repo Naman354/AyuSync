@@ -154,33 +154,57 @@ const DEMO_PATIENTS = [
         ) : (
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
             {/* Desktop table header */}
-            <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <div className="hidden sm:grid grid-cols-[2fr_1fr_1.5fr_auto] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
               <span>Patient</span>
               <span>Age & gender</span>
-              <span>Village</span>
-              <span />
+              <span>Village / Area</span>
+              <span className="text-right">Action</span>
             </div>
             <ul className="divide-y divide-gray-50">
               {patients.map(p => (
                 <li key={p.id}>
                   <Link
                     to={`/patients/${p.id}`}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
+                    className="group sm:grid sm:grid-cols-[2fr_1fr_1.5fr_auto] flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50/80 transition-colors"
                   >
-                    <div className="w-10 h-10 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-semibold text-sm shrink-0">
-                      {p.name?.charAt(0) || 'P'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-gray-900">{p.name}</div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
-                        <span>{p.age ? `${p.age} yrs` : '--'}</span>
-                        <span>·</span>
-                        <span>{p.gender || '--'}</span>
-                        {(p.village || p.address) && <><span>·</span><span>{p.village || p.address}</span></>}
-                        {p.abhaId && <><span>·</span><span className="font-mono text-gray-400 text-[11px]">ID: {p.abhaId.slice(0, 14)}</span></>}
+                    {/* Column 1: Patient Identity */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-semibold text-sm shrink-0">
+                        {p.name?.charAt(0) || 'P'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
+                        {p.abhaId ? (
+                          <span className="font-mono text-gray-400 text-[11px] block truncate">ID: {p.abhaId}</span>
+                        ) : p.phone ? (
+                          <span className="text-gray-400 text-[11px] block">{p.phone}</span>
+                        ) : null}
+                        {/* Mobile-only secondary info */}
+                        <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                          <span>{p.age ? `${p.age} yrs` : '--'}</span>
+                          <span>·</span>
+                          <span>{p.gender || '--'}</span>
+                          {(p.village || p.address) && <><span>·</span><span>{p.village || p.address}</span></>}
+                        </div>
                       </div>
                     </div>
-                    <ChevronRight size={16} className="text-gray-300 shrink-0" />
+
+                    {/* Column 2: Age & Gender */}
+                    <div className="hidden sm:block text-sm text-gray-700">
+                      <span className="font-medium text-gray-900">{p.age ? `${p.age} yrs` : '--'}</span>
+                      {p.gender && <span className="text-gray-400 text-xs ml-1.5">({p.gender})</span>}
+                    </div>
+
+                    {/* Column 3: Village / Address */}
+                    <div className="hidden sm:block text-sm text-gray-600 truncate">
+                      {p.village || p.address || <span className="text-gray-400 italic">Not recorded</span>}
+                    </div>
+
+                    {/* Column 4: Action */}
+                    <div className="flex items-center justify-end gap-1 text-xs font-semibold text-[#1e6641] group-hover:translate-x-0.5 transition-transform shrink-0">
+                      <span className="hidden lg:inline">View profile</span>
+                      <ChevronRight size={16} className="text-gray-400 group-hover:text-[#1e6641] transition-colors" />
+                    </div>
                   </Link>
                 </li>
               ))}

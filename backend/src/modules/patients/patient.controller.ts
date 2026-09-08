@@ -118,8 +118,14 @@ export const getPatientTimeline = async (req: Request, res: Response) => {
           },
           orderBy: { start: 'desc' }
         },
-        referrals: true,
-        conditions: { where: { status: 'ACTIVE' } }
+        referrals: {
+          include: { origin: true, destination: true }
+        },
+        conditions: { orderBy: { diagnosedAt: 'desc' } },
+        followUps: {
+          include: { worker: { include: { user: true } } },
+          orderBy: { dueDate: 'asc' }
+        }
       }
     });
 
@@ -160,3 +166,32 @@ export const createEncounter = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
+export const addCondition = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, status, diagnosedAt } = req.body;
+
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Condition name is required' });
+    }
+
+    const patient = await prisma.patient.findUnique({ where: { id } });
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+    const condition = await prisma.condition.create({
+      data: {
+        patientId: id,
+        name: name.trim(),
+        status: status === 'RESOLVED' ? 'RESOLVED' : 'ACTIVE',
+        diagnosedAt: diagnosedAt ? new Date(diagnosedAt) : new Date()
+      }
+    });
+
+    res.status(201).json(condition);
+  } catch (error) {
+    console.error('Error adding condition:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
+
