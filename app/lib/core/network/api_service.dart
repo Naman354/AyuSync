@@ -83,7 +83,7 @@ class ApiService {
   Future<bool> ensureAuthenticated() async {
     if (_authToken != null && _authToken!.isNotEmpty) return true;
     try {
-      final res = await login(phone: '+919998887776', password: 'password123');
+      await login(phone: '+919998887776', password: 'password123');
       return _authToken != null && _authToken!.isNotEmpty;
     } catch (_) {
       return false;
@@ -122,6 +122,11 @@ class ApiService {
             .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
             .timeout(timeout);
         break;
+      case 'PATCH':
+        response = await http
+            .patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+            .timeout(timeout);
+        break;
       case 'DELETE':
         response = await http.delete(uri, headers: headers).timeout(timeout);
         break;
@@ -147,6 +152,11 @@ class ApiService {
           case 'PUT':
             response = await http
                 .put(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
+                .timeout(timeout);
+            break;
+          case 'PATCH':
+            response = await http
+                .patch(uri, headers: headers, body: body != null ? jsonEncode(body) : null)
                 .timeout(timeout);
             break;
           case 'DELETE':
@@ -350,16 +360,118 @@ class ApiService {
   // 5. FOLLOW-UP TASKS
   // =========================================================
 
-  Future<List<dynamic>> getFollowUps() async {
+  Future<List<dynamic>> getFollowUps({String? status}) async {
     final result = await _request(
       method: 'GET',
       path: ApiConfig.followups,
+      queryParameters: status != null ? {'status': status} : null,
     );
     return (result is List) ? result : [];
   }
 
+  Future<Map<String, dynamic>> completeFollowUp(
+    String id, {
+    String? completionNotes,
+  }) async {
+    final result = await _request(
+      method: 'PATCH',
+      path: '${ApiConfig.followups}/$id/complete',
+      body: {
+        if (completionNotes != null) 'completionNotes': completionNotes,
+      },
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  Future<Map<String, dynamic>> escalateFollowUp(
+    String id, {
+    bool deescalate = false,
+    String? reason,
+  }) async {
+    final result = await _request(
+      method: 'PATCH',
+      path: '${ApiConfig.followups}/$id/escalate',
+      body: {
+        'deescalate': deescalate,
+        if (reason != null) 'reason': reason,
+      },
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
   // =========================================================
-  // 6. OFFLINE SYNC BATCH
+  // 6. PATIENT TIMELINE & CONDITIONS
+  // =========================================================
+
+  Future<Map<String, dynamic>> getPatientTimeline(String patientId) async {
+    final result = await _request(
+      method: 'GET',
+      path: '${ApiConfig.patients}/$patientId/timeline',
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  Future<Map<String, dynamic>> addPatientCondition(
+    String patientId, {
+    required String name,
+    String status = 'ACTIVE',
+    String? diagnosedAt,
+  }) async {
+    final result = await _request(
+      method: 'POST',
+      path: '${ApiConfig.patients}/$patientId/conditions',
+      body: {
+        'name': name.trim(),
+        'status': status,
+        'diagnosedAt': diagnosedAt ?? DateTime.now().toIso8601String(),
+      },
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  // =========================================================
+  // 7. AI TRIAGE & FACILITY ROUTING
+  // =========================================================
+
+  Future<Map<String, dynamic>> triageAssessment({
+    int? age,
+    String? gender,
+    required List<Map<String, dynamic>> symptoms,
+    required Map<String, dynamic> vitals,
+  }) async {
+    final result = await _request(
+      method: 'POST',
+      path: ApiConfig.aiTriage,
+      body: {
+        if (age != null) 'age': age,
+        if (gender != null) 'gender': gender,
+        'symptoms': symptoms,
+        'vitals': vitals,
+      },
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  Future<Map<String, dynamic>> routeFacility({
+    required String urgencyCategory,
+    required List<Map<String, dynamic>> symptoms,
+    required Map<String, dynamic> vitals,
+  }) async {
+    final result = await _request(
+      method: 'POST',
+      path: ApiConfig.aiRoute,
+      body: {
+        'urgencyCategory': urgencyCategory.toUpperCase(),
+        'urgency': urgencyCategory.toUpperCase(),
+        'symptoms': symptoms,
+        'vitals': vitals,
+      },
+    );
+    return (result is Map<String, dynamic>) ? result : {};
+  }
+
+  // =========================================================
+  // 8. OFFLINE SYNC BATCH
   // =========================================================
 
   Future<Map<String, dynamic>> processSyncBatch({

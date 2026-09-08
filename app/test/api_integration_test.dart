@@ -99,7 +99,7 @@ void main() {
       expect(facility.availableBeds, equals(15));
     });
 
-    test('FollowUpTask parses backend pull delta', () {
+    test('FollowUpTask parses backend pull delta and provides helper getters', () {
       final backendFollowup = {
         'id': 'fu-uuid-101',
         'patientId': 'pat-uuid-123',
@@ -107,12 +107,54 @@ void main() {
         'dueDate': '2026-09-10T10:00:00.000Z',
         'reason': 'Hypertension follow-up visit',
         'status': 'PENDING',
+        'visitNotes': 'Patient taking prescribed medication',
       };
 
       final task = FollowUpTask.fromBackendFollowUp(backendFollowup);
       expect(task.id, equals('fu-uuid-101'));
       expect(task.taskDescription, equals('Hypertension follow-up visit'));
-      expect(task.status, equals('PENDING'));
+      expect(task.reason, equals('Hypertension follow-up visit'));
+      expect(task.notes, equals('Patient taking prescribed medication'));
+      expect(task.isCompleted, isFalse);
+
+      final completedTask = task.copyWith(status: 'COMPLETED');
+      expect(completedTask.isCompleted, isTrue);
+    });
+
+    test('ReferralCase correctly preserves needsAmbulance dispatch flag', () {
+      final fac = Facility(
+        id: 'fac-1',
+        name: 'District Hospital',
+        type: 'DH',
+        distanceKm: 12.5,
+        readinessScore: 92,
+        hasSpecialist: true,
+        hasEmergency: true,
+        availableBeds: 50,
+        waitingMinutes: 20,
+        availableServices: ['ICU', 'Emergency'],
+        freshness: 'Live',
+      );
+
+      final referral = ReferralCase(
+        referralId: 'REF-TEST-001',
+        patientId: 'pat-1',
+        patientName: 'Ramesh Kumar',
+        chiefComplaint: 'Severe breathlessness',
+        triageUrgency: 'CRITICAL',
+        facility: fac,
+        submittedAt: DateTime.now(),
+        needsAmbulance: true,
+      );
+
+      expect(referral.needsAmbulance, isTrue);
+      expect(referral.referralId, equals('REF-TEST-001'));
+    });
+
+    test('ApiConfig provides AI triage and route endpoints', () {
+      expect(ApiConfig.aiTriage, contains('/ai/triage'));
+      expect(ApiConfig.aiRoute, contains('/ai/route'));
+      expect(ApiConfig.notifications, contains('/notifications'));
     });
 
     test('SyncItem produces valid mutation payload for POST /api/sync', () {

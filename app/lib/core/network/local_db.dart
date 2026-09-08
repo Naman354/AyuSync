@@ -193,6 +193,16 @@ class LocalDatabase {
     return await db.query('follow_ups', orderBy: 'dueDate ASC');
   }
 
+  Future<void> markFollowUpSynced(String followUpId) async {
+    final db = await instance.database;
+    await db.update(
+      'follow_ups',
+      {'isSynced': 1, 'status': 'COMPLETED'},
+      where: 'id = ?',
+      whereArgs: [followUpId],
+    );
+  }
+
   Future<void> queueMutation(Map<String, dynamic> mutation) async {
     final db = await instance.database;
     await db.insert('sync_queue', mutation, conflictAlgorithm: ConflictAlgorithm.replace);

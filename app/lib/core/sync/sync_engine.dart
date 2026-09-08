@@ -147,6 +147,8 @@ class SyncEngine {
 
               if (entity == 'PATIENT' && entityId != null && entityId.isNotEmpty) {
                 await LocalDatabase.instance.markPatientSynced(entityId);
+              } else if ((entity == 'FOLLOWUP' || entity == 'FOLLOW_UP') && entityId != null && entityId.isNotEmpty) {
+                await LocalDatabase.instance.markFollowUpSynced(entityId);
               }
             }
           }

@@ -385,6 +385,55 @@ class _NewPatientPageState extends State<NewPatientPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader('Chief Clinical Complaint', Icons.healing_outlined),
+        const SizedBox(height: 8),
+        const Text('Quick Symptom Chips:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            'High Fever',
+            'Severe Breathlessness',
+            'Persistent Cough',
+            'Chest Pain',
+            'Dizziness / Syncope',
+            'Abdominal Pain',
+            'Severe Headache',
+            'Vomiting / Diarrhea',
+          ].map((symptom) {
+            final isContained = _symptomController.text.contains(symptom);
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  if (_symptomController.text.isEmpty) {
+                    _symptomController.text = symptom;
+                  } else if (!isContained) {
+                    _symptomController.text = '${_symptomController.text}, $symptom';
+                  }
+                  if (symptom == 'Chest Pain' || symptom == 'Severe Breathlessness') {
+                    _selectedSeverity = 'SEVERE';
+                  }
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isContained ? AppColors.forest : AppColors.mintLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.forest.withValues(alpha: 0.2)),
+                ),
+                child: Text(
+                  symptom,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isContained ? Colors.white : AppColors.forest,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
         const SizedBox(height: 12),
         _buildTextField(
           controller: _symptomController,

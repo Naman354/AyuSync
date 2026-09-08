@@ -43,14 +43,19 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               // 2. Connectivity & Sync Status Bar (Preserves Offline Functionality)
               _buildSyncBar(context, appState),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
+
+              // Overdue Alert Banner (Care Continuity Guard)
+              _buildOverdueAlertBanner(context, appState),
+
+              const SizedBox(height: 12),
 
               // 3. Search Bar
               _buildSearchBar(context),
 
               const SizedBox(height: 18),
 
-              // 4. To-Do List Card
+              // 4. To-Do List Card (Dynamic Checklist & Schedule)
               _buildTodoListCard(context, appState),
 
               const SizedBox(height: 20),
@@ -60,13 +65,85 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
 
               const SizedBox(height: 20),
 
-              // 6. Inbox Card
+              // 6. Inbox Card (Counter-referral doctor loops)
               _buildInboxCard(context, appState),
+
+              const SizedBox(height: 20),
+
+              // 7. Recent Patients Card
+              _buildRecentPatientsCard(context, appState),
 
               const SizedBox(height: 24),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildOverdueAlertBanner(BuildContext context, AppState appState) {
+    final now = DateTime.now();
+    final overdueTasks = appState.followUpTasks.where((t) {
+      if (t.isCompleted) return false;
+      if (t.status.toUpperCase() == 'OVERDUE') return true;
+      return t.dueDate.isBefore(now);
+    }).toList();
+
+    if (overdueTasks.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF87171).withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${overdueTasks.length} Overdue Care Gap${overdueTasks.length > 1 ? 's' : ''}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF991B1B),
+                  ),
+                ),
+                Text(
+                  'Patient${overdueTasks.length > 1 ? 's require' : ' requires'} urgent clinical follow-up visit',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFFB91C1C),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: const Size(60, 32),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pushNamed(context, '/followup-inbox'),
+            child: const Text('Review', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -271,6 +348,11 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   }
 
   Widget _buildTodoListCard(BuildContext context, AppState appState) {
+    final allTasks = appState.followUpTasks;
+    final completedCount = allTasks.where((t) => t.isCompleted).length;
+    final pendingTasks = allTasks.where((t) => !t.isCompleted).toList();
+    final double progress = allTasks.isEmpty ? 0.0 : (completedCount / allTasks.length);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -303,9 +385,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                 ),
               ),
               const SizedBox(width: 6),
-              const Text(
-                '(5 Tasks Await)',
-                style: TextStyle(
+              Text(
+                '(${pendingTasks.length} Awaiting)',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF375543),
@@ -326,7 +408,46 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             ],
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+
+          // Checklist Progress Indicator
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Today\'s Checklist: $completedCount of ${allTasks.length} tasks done',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1E3A2B)),
+                    ),
+                    Text(
+                      '${(progress * 100).toInt()}%',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.forest),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                    backgroundColor: const Color(0xFFD1E7DD),
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.forest),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
 
           // Date Selector Carousel
           Row(
@@ -393,122 +514,115 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Timeline Subheader
-                Row(
-                  children: [
-                    const Text(
-                      '9 AM',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '11 Wednesday - Today',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.forest.withValues(alpha: 0.8),
-                        ),
-                        textAlign: TextAlign.end,
+            child: pendingTasks.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF16A34A), size: 36),
+                          const SizedBox(height: 6),
+                          Text(
+                            allTasks.isEmpty ? 'No follow-up tasks assigned' : 'All follow-up tasks completed! 🎉',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF374151)),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-                const Divider(color: Color(0xFFE5E7EB), thickness: 0.8, height: 12),
+                  )
+                : Column(
+                    children: pendingTasks.take(3).map((task) {
+                      final isOverdue = task.status.toUpperCase() == 'OVERDUE' || task.dueDate.isBefore(DateTime.now());
 
-                // 10 AM Appointment Card
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      width: 42,
-                      child: Text(
-                        '10 AM',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFAFD6B8),
+                          color: isOverdue ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isOverdue ? const Color(0xFFFECACA) : const Color(0xFFDCFCE7),
+                          ),
                         ),
-                        child: Column(
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Dr. Amit Patel',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.textDark,
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => FollowUpTaskDetailsPage(task: task)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          task.patientName,
+                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: isOverdue ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            isOverdue ? 'OVERDUE' : 'DUE SOON',
+                                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      task.reason,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isOverdue ? const Color(0xFF991B1B) : const Color(0xFF166534),
+                                      ),
+                                    ),
+                                    if (task.notes.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        task.notes,
+                                        style: const TextStyle(fontSize: 11, color: Color(0xFF4B5563)),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
-                                  ),
-                                  child: const Icon(Icons.check, size: 14, color: AppColors.forest),
-                                ),
-                                const SizedBox(width: 4),
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: const BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
-                                  ),
-                                  child: const Icon(Icons.close, size: 14, color: Color(0xFFDC2626)),
-                                ),
-                              ],
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Submit the health update after 3 days of observation.',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF2A5038),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () async {
+                                await appState.completeFollowUpTask(taskId: task.id, visitNotes: 'Completed via dashboard checklist');
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Marked follow-up for ${task.patientName} as completed!')),
+                                  );
+                                }
+                              },
+                              child: Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isOverdue ? const Color(0xFFFCA5A5) : const Color(0xFFBBF7D0),
+                                ),
+                                child: const Icon(Icons.check, size: 20, color: Color(0xFF166534)),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-                const Row(
-                  children: [
-                    Text(
-                      '11 AM',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Row(
-                  children: [
-                    Text(
-                      '12 AM',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF6B7280)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                      );
+                    }).toList(),
+                  ),
           ),
         ],
       ),
@@ -622,7 +736,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   }
 
   Widget _buildInboxCard(BuildContext context, AppState appState) {
-    final followUps = appState.followUpTasks;
+    final followUps = appState.followUpTasks.where((t) => !t.isCompleted).toList();
 
     return Container(
       width: double.infinity,
@@ -649,17 +763,17 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
               ),
               const SizedBox(width: 10),
               const Text(
-                'Inbox',
+                'Inbox (Counter-Referrals)',
                 style: TextStyle(
-                  fontSize: 17,
+                  fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: AppColors.textDark,
                 ),
               ),
               const SizedBox(width: 6),
-              const Text(
-                '(3 New)',
-                style: TextStyle(
+              Text(
+                '(${followUps.length} New)',
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF6B7280),
@@ -682,60 +796,145 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
 
           const SizedBox(height: 14),
 
-          // Message Item 1: Dr. Rahul Sharma
-          _buildInboxItem(
-            context,
-            name: 'Dr. Rahul Sharma',
-            subtitle: 'Follow Up For Ramesh Kumar',
-            time: '10:30 AM',
-            isUnread: true,
-            avatarColor: const Color(0xFFDBEAFE),
-            onTap: () {
-              if (followUps.isNotEmpty) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => FollowUpTaskDetailsPage(task: followUps.first)),
+          if (followUps.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Center(
+                child: Text('No counter-referral tasks pending.', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+              ),
+            )
+          else
+            Column(
+              children: followUps.take(3).map((task) {
+                final isOverdue = task.status.toUpperCase() == 'OVERDUE' || task.dueDate.isBefore(DateTime.now());
+                return Column(
+                  children: [
+                    _buildInboxItem(
+                      context,
+                      name: task.patientName,
+                      subtitle: '${task.reason}${task.notes.isNotEmpty ? " • ${task.notes}" : ""}',
+                      time: '${task.dueDate.day}/${task.dueDate.month}',
+                      isUnread: true,
+                      avatarColor: isOverdue ? const Color(0xFFFEE2E2) : const Color(0xFFDCFCE7),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => FollowUpTaskDetailsPage(task: task)),
+                        );
+                      },
+                    ),
+                    const Divider(color: Color(0xFFF1F5F2), thickness: 1, height: 16),
+                  ],
                 );
-              } else {
-                Navigator.pushNamed(context, '/followup-inbox');
-              }
-            },
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentPatientsCard(BuildContext context, AppState appState) {
+    final recentPatients = appState.patients.take(3).toList();
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD6E4DB), width: 1.2),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.forest.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.people_outline_rounded, color: AppColors.forest, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Recent Patients',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () => Navigator.pushNamed(context, '/patient-search'),
+                child: const Text(
+                  'View All',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.forest,
+                  ),
+                ),
+              ),
+            ],
           ),
 
-          const Divider(color: Color(0xFFF1F5F2), thickness: 1, height: 16),
+          const SizedBox(height: 12),
 
-          // Message Item 2: Dr. Neha Verma
-          _buildInboxItem(
-            context,
-            name: 'Dr. Neha Verma',
-            subtitle: 'Update Required For Meena Devi',
-            time: 'Yesterday',
-            isUnread: true,
-            avatarColor: const Color(0xFFFCE7F3),
-            onTap: () {
-              if (followUps.length > 1) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => FollowUpTaskDetailsPage(task: followUps[1])),
+          if (recentPatients.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Center(
+                child: Text('No registered patients yet.', style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+              ),
+            )
+          else
+            Column(
+              children: recentPatients.map((patient) {
+                return InkWell(
+                  onTap: () {
+                    appState.selectPatient(patient);
+                    Navigator.pushNamed(context, '/patient-details');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: const Color(0xFFE0F2FE),
+                          child: Text(
+                            patient.name.isNotEmpty ? patient.name[0].toUpperCase() : 'P',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                patient.name,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${patient.age} Yrs • ${patient.gender} • ${patient.village}',
+                                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF), size: 20),
+                      ],
+                    ),
+                  ),
                 );
-              } else {
-                Navigator.pushNamed(context, '/followup-inbox');
-              }
-            },
-          ),
-
-          const Divider(color: Color(0xFFF1F5F2), thickness: 1, height: 16),
-
-          // Message Item 3: Dr. Amit Patel
-          _buildInboxItem(
-            context,
-            name: 'Dr. Amit Patel',
-            subtitle: 'Lab Report Received',
-            time: '2 Days Ago',
-            isUnread: false,
-            avatarColor: const Color(0xFFE0E7FF),
-            onTap: () => Navigator.pushNamed(context, '/followup-inbox'),
-          ),
+              }).toList(),
+            ),
         ],
       ),
     );
@@ -782,6 +981,8 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                       fontWeight: FontWeight.w500,
                       color: Color(0xFF6B7280),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

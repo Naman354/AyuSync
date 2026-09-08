@@ -69,6 +69,16 @@ class AppState extends ChangeNotifier {
   Facility? get selectedFacility => _selectedFacility;
   ReferralCase? get lastSubmittedCase => _lastSubmittedCase;
 
+  void selectPatient(Patient patient) {
+    _currentPatient = patient;
+    notifyListeners();
+  }
+
+  void clearSelectedPatient() {
+    _currentPatient = null;
+    notifyListeners();
+  }
+
   AppState() {
     _initDefaults();
     _loadFromLocalDb();
@@ -530,7 +540,7 @@ class AppState extends ChangeNotifier {
       isSynced: false,
     );
 
-    // Compute local triage prediction first
+    // Compute local triage prediction first as fallback
     TriageResult triageResult = _computeLocalTriage(assessment);
 
     if (_isOnline) {
@@ -543,48 +553,86 @@ class AppState extends ChangeNotifier {
           }
         ];
 
+        // Format vitals strictly matching backend validator requirements
         final vitalsPayload = <Map<String, dynamic>>[];
         if (vitals.systolicBp != null) {
           vitalsPayload.add({
-            'type': 'BP',
-            'value': '${vitals.systolicBp}/${vitals.diastolicBp ?? 80}',
+            'type': 'BP_SYSTOLIC',
+            'value': vitals.systolicBp!,
+            'unit': 'mmHg',
+          });
+        }
+        if (vitals.diastolicBp != null) {
+          vitalsPayload.add({
+            'type': 'BP_DIASTOLIC',
+            'value': vitals.diastolicBp!,
             'unit': 'mmHg',
           });
         }
         if (vitals.pulseRate != null) {
           vitalsPayload.add({
-            'type': 'HR',
-            'value': '${vitals.pulseRate}',
+            'type': 'HEART_RATE',
+            'value': vitals.pulseRate!,
             'unit': 'bpm',
           });
         }
         if (vitals.temperature != null) {
           vitalsPayload.add({
             'type': 'TEMP',
-            'value': '${vitals.temperature}',
+            'value': vitals.temperature!,
             'unit': '°F',
           });
         }
         if (vitals.spo2 != null) {
           vitalsPayload.add({
             'type': 'SPO2',
-            'value': '${vitals.spo2}',
+            'value': vitals.spo2!,
             'unit': '%',
           });
         }
-        if (vitals.respiratoryRate != null) {
-          vitalsPayload.add({
-            'type': 'RR',
-            'value': '${vitals.respiratoryRate}',
-            'unit': 'breaths/min',
-          });
-        }
-        if (vitals.weight != null) {
-          vitalsPayload.add({
-            'type': 'WEIGHT',
-            'value': '${vitals.weight}',
-            'unit': 'kg',
-          });
+
+        // 1. Direct AI Triage Request (Matching Web ASHA Flow)
+        try {
+          final aiRes = await ApiService.instance.triageAssessment(
+            age: _currentPatient?.age ?? 30,
+            gender: _currentPatient?.gender ?? 'Female',
+            symptoms: symptomsPayload,
+            vitals: {
+              'blood_pressure': '${vitals.systolicBp ?? 120}/${vitals.diastolicBp ?? 80}',
+              'bpSystolic': vitals.systolicBp ?? 120,
+              'bpDiastolic': vitals.diastolicBp ?? 80,
+              'spo2': vitals.spo2 ?? 98,
+              'heart_rate': vitals.pulseRate ?? 72,
+              'temperature': vitals.temperature ?? 98.6,
+            },
+          );
+
+          if (aiRes.isNotEmpty && (aiRes.containsKey('urgency') || aiRes.containsKey('urgencyCategory'))) {
+            final urgency = (aiRes['urgency'] ?? aiRes['urgencyCategory'] ?? triageResult.urgencyLevel).toString().toUpperCase();
+            final reasons = <String>[];
+            if (aiRes['reasons'] is List) {
+              for (var r in (aiRes['reasons'] as List)) {
+                reasons.add(r.toString());
+              }
+            }
+            final confidence = (aiRes['confidence'] as num?)?.toDouble() ?? 0.88;
+            final score = (urgency == 'URGENT') ? 92 : (urgency == 'PRIORITY' ? 65 : 25);
+            final recAction = aiRes['recommended_next_action']?.toString() ?? triageResult.recommendedAction;
+            final explanation = reasons.isNotEmpty ? reasons.join('; ') : triageResult.explanationText;
+
+            triageResult = TriageResult(
+              assessmentId: assessment.id,
+              urgencyLevel: urgency,
+              urgencyScore: score,
+              contributingFactors: reasons.isNotEmpty ? reasons : triageResult.contributingFactors,
+              recommendedAction: recAction,
+              explanationText: explanation,
+              confirmedUrgency: urgency,
+              confidence: confidence,
+            );
+          }
+        } catch (aiErr) {
+          debugPrint('AI triage direct call notice: $aiErr');
         }
 
         String? encounterId;
@@ -592,7 +640,7 @@ class AppState extends ChangeNotifier {
           final enc = await ApiService.instance.createEncounter(patientId: patientId);
           encounterId = enc['id']?.toString();
         } catch (e) {
-          debugPrint('Encounter create: $e');
+          debugPrint('Encounter create notice: $e');
         }
 
         final res = await ApiService.instance.createAssessment(
@@ -616,7 +664,7 @@ class AppState extends ChangeNotifier {
           );
         }
 
-        // Parse AI Recommendations if returned from backend
+        // Parse AI Recommendations if returned from backend assessment
         if (res['aiRecommendations'] is List && (res['aiRecommendations'] as List).isNotEmpty) {
           final ai = res['aiRecommendations'][0];
           final urgency = ai['urgencyCategory']?.toString() ?? triageResult.urgencyLevel;
@@ -640,6 +688,7 @@ class AppState extends ChangeNotifier {
                     : 'Standard outpatient routine care at Sub-Centre / PHC.'),
             explanationText: 'AI Triage classified as $urgency based on clinical vital thresholds.',
             confirmedUrgency: urgency,
+            confidence: confidence,
           );
         }
       } catch (e) {
@@ -774,11 +823,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  ReferralCase submitReferralCase() {
+  ReferralCase submitReferralCase({bool needsAmbulance = false}) {
     final patient = _currentPatient ?? (_patients.isNotEmpty ? _patients.first : Patient(id: 'PAT-1', name: 'Citizen', age: 30, gender: 'Female', phone: '+919876543210', village: 'Khandala'));
     final facility = _selectedFacility ?? (_facilities.isNotEmpty ? _facilities.first : Facility(id: 'fac-1', name: 'PHC Khandala', type: 'PHC', distanceKm: 2, readinessScore: 80, hasSpecialist: false, hasEmergency: true, availableBeds: 5, waitingMinutes: 15, availableServices: ['OPD'], freshness: 'Now'));
     final urgency = _currentTriageResult?.confirmedUrgency ?? _currentTriageResult?.urgencyLevel ?? 'PRIORITY';
     final complaint = _currentAssessment?.primarySymptom ?? 'General clinical consultation';
+
+    final originId = _facilities.isNotEmpty ? _facilities.first.id : 'fac-khandala-phc';
+    final destinationId = facility.id.isNotEmpty ? facility.id : 'fac-baramati-chc';
 
     final referral = ReferralCase(
       referralId: 'REF-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
@@ -787,6 +839,7 @@ class AppState extends ChangeNotifier {
       triageUrgency: urgency,
       facility: facility,
       chiefComplaint: complaint,
+      needsAmbulance: needsAmbulance,
     );
 
     _lastSubmittedCase = referral;
@@ -794,39 +847,56 @@ class AppState extends ChangeNotifier {
     if (_isOnline) {
       ApiService.instance.createReferral(
         patientId: patient.id,
-        originId: 'fac-khandala-phc',
-        destinationId: facility.id.startsWith('fac-') ? facility.id : 'fac-baramati-chc',
+        originId: originId,
+        destinationId: destinationId,
         reason: complaint,
         urgency: urgency,
       ).then((res) {
         debugPrint('Referral created on backend: ${res['id']}');
       }).catchError((e) {
         debugPrint('Backend referral submission fallback: $e');
-        _queueReferralMutation(referral);
+        _queueReferralMutation(referral, originId: originId, destinationId: destinationId);
       });
     } else {
-      _queueReferralMutation(referral);
+      _queueReferralMutation(referral, originId: originId, destinationId: destinationId);
     }
 
     notifyListeners();
     return referral;
   }
 
-  void _queueReferralMutation(ReferralCase referral) {
+  void _queueReferralMutation(ReferralCase referral, {String? originId, String? destinationId}) {
+    final opId = _uuid.v4();
     _syncQueue.add(SyncItem(
-      id: _uuid.v4(),
+      id: opId,
       entityType: 'REFERRAL',
       action: 'CREATE',
       description: 'Referral to ${referral.facility.name} for ${referral.patientName} (Urgency: ${referral.triageUrgency})',
     ));
+
+    SyncEngine().queueMutation(
+      operationId: opId,
+      entityId: referral.referralId,
+      entity: 'REFERRAL',
+      action: 'CREATE',
+      payload: {
+        'id': referral.referralId,
+        'patientId': referral.patientId,
+        'originId': originId ?? (_facilities.isNotEmpty ? _facilities.first.id : 'fac-khandala-phc'),
+        'destinationId': destinationId ?? referral.facility.id,
+        'urgency': referral.triageUrgency,
+        'reason': referral.chiefComplaint,
+        'needsAmbulance': referral.needsAmbulance,
+      },
+    );
   }
 
-  // --- Follow Up Completion ---
-  void completeFollowUpTask({
+  // --- Follow Up Completion & Escalation ---
+  Future<void> completeFollowUpTask({
     required String taskId,
-    required String visitNotes,
+    String visitNotes = 'Completed follow-up visit',
     Vitals? recordedVitals,
-  }) {
+  }) async {
     final index = _followUpTasks.indexWhere((t) => t.id == taskId);
     if (index != -1) {
       final task = _followUpTasks[index];
@@ -835,17 +905,99 @@ class AppState extends ChangeNotifier {
         visitNotes: visitNotes,
         completedAt: DateTime.now(),
       );
-
-      if (!_isOnline) {
-        _syncQueue.add(SyncItem(
-          id: _uuid.v4(),
-          entityType: 'FOLLOW_UP',
-          action: 'UPDATE',
-          description: 'Completed Visit for ${task.patientName}: $visitNotes',
-        ));
-      }
-
       notifyListeners();
+
+      if (_isOnline) {
+        try {
+          await ApiService.instance.completeFollowUp(
+            taskId,
+            completionNotes: visitNotes,
+          );
+        } catch (e) {
+          debugPrint('Online complete follow-up failed, queueing: $e');
+          _queueFollowUpMutation(taskId, task.patientName, visitNotes);
+        }
+      } else {
+        _queueFollowUpMutation(taskId, task.patientName, visitNotes);
+      }
+    }
+  }
+
+  void _queueFollowUpMutation(String taskId, String patientName, String visitNotes) {
+    final opId = _uuid.v4();
+    _syncQueue.add(SyncItem(
+      id: opId,
+      entityType: 'FOLLOW_UP',
+      action: 'UPDATE',
+      description: 'Completed Visit for $patientName: $visitNotes',
+    ));
+
+    SyncEngine().queueMutation(
+      operationId: opId,
+      entityId: taskId,
+      entity: 'FOLLOWUP',
+      action: 'UPDATE',
+      payload: {
+        'id': taskId,
+        'status': 'COMPLETED',
+        'notes': visitNotes,
+      },
+    );
+  }
+
+  Future<void> toggleEscalateFollowUp(String taskId, {String? reason}) async {
+    final index = _followUpTasks.indexWhere((t) => t.id == taskId);
+    if (index == -1) return;
+
+    final task = _followUpTasks[index];
+    final isCurrentlyEscalated = task.status == 'ESCALATED';
+    final newStatus = isCurrentlyEscalated ? 'OVERDUE' : 'ESCALATED';
+
+    _followUpTasks[index] = task.copyWith(status: newStatus);
+    notifyListeners();
+
+    if (_isOnline) {
+      try {
+        await ApiService.instance.escalateFollowUp(
+          taskId,
+          deescalate: isCurrentlyEscalated,
+          reason: reason ?? 'Overdue care gap review > 48h (ASHA frontline)',
+        );
+      } catch (e) {
+        debugPrint('Escalate follow-up API error: $e');
+      }
+    }
+  }
+
+  // --- Patient Timeline & Conditions ---
+  Future<Map<String, dynamic>> fetchPatientTimeline(String patientId) async {
+    if (!_isOnline) return {};
+    try {
+      return await ApiService.instance.getPatientTimeline(patientId);
+    } catch (e) {
+      debugPrint('fetchPatientTimeline error: $e');
+      return {};
+    }
+  }
+
+  Future<bool> addPatientCondition(
+    String patientId, {
+    required String name,
+    String status = 'ACTIVE',
+    String? diagnosedAt,
+  }) async {
+    if (!_isOnline) return false;
+    try {
+      final res = await ApiService.instance.addPatientCondition(
+        patientId,
+        name: name,
+        status: status,
+        diagnosedAt: diagnosedAt,
+      );
+      return res.isNotEmpty;
+    } catch (e) {
+      debugPrint('addPatientCondition error: $e');
+      return false;
     }
   }
 

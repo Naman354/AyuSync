@@ -25,6 +25,9 @@ class ApiConfig {
   static const String facilities = '/api/facilities';
   static const String referrals = '/api/referrals';
   static const String followups = '/api/followups';
+  static const String aiTriage = '/api/ai/triage';
+  static const String aiRoute = '/api/ai/route';
+  static const String notifications = '/api/notifications';
   static const String queue = '/api/queue';
   static const String appointments = '/api/appointments';
   static const String analyticsDashboard = '/api/analytics/dashboard';
