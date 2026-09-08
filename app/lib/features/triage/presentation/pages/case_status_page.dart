@@ -151,7 +151,7 @@ class CaseStatusPage extends StatelessWidget {
                     ),
                     _stepTimeline(
                       title: '4. Downstream Counter-Referral',
-                      subtitle: 'Prescription & Follow-up tasks will route to 06 Follow-up Inbox',
+                      subtitle: 'Prescription & Follow-up tasks will route to Follow-up Tasks Inbox',
                       isDone: false,
                     ),
                   ],

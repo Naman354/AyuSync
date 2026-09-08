@@ -8,15 +8,22 @@ import '../models/facility_model.dart';
 import '../models/followup_model.dart';
 import '../models/sync_item_model.dart';
 import '../network/api_service.dart';
+import '../network/network_quality_service.dart';
 import '../network/local_db.dart';
 import '../sync/sync_engine.dart';
 
 class AppState extends ChangeNotifier {
   final _uuid = const Uuid();
 
-  // Network Connectivity State (Can be toggled in UI for offline demo)
+  // Network Connectivity State (Automatic detection with manual override option)
   bool _isOnline = true;
   bool get isOnline => _isOnline;
+
+  NetworkStatus _networkStatus = NetworkStatus.online;
+  NetworkStatus get networkStatus => _networkStatus;
+
+  bool? _manualOverride;
+  bool get isManualOverride => _manualOverride != null;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -82,6 +89,7 @@ class AppState extends ChangeNotifier {
   AppState() {
     _initDefaults();
     _loadFromLocalDb();
+    _initNetworkMonitoring();
   }
 
   void _initDefaults() {
@@ -224,12 +232,61 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void _initNetworkMonitoring() {
+    final netService = NetworkQualityService();
+    netService.onStatusChanged.listen((status) {
+      _onNetworkStatusChanged(status);
+    });
+    netService.startMonitoring();
+  }
+
+  void _onNetworkStatusChanged(NetworkStatus status) {
+    _networkStatus = status;
+    final previousOnline = _isOnline;
+
+    if (_manualOverride != null) {
+      _isOnline = _manualOverride!;
+    } else {
+      // Automatic detection: offline if network turned off OR weak internet detected
+      _isOnline = (status == NetworkStatus.online);
+    }
+
+    if (!previousOnline && _isOnline) {
+      // Connectivity restored! Automatically trigger background sync of pending mutations
+      syncAllQueueItems();
+      fetchBackendData();
+    }
+
+    notifyListeners();
+  }
+
   void toggleOnlineStatus() {
-    _isOnline = !_isOnline;
+    // Manually toggle online/offline
+    _manualOverride = !_isOnline;
+    _isOnline = _manualOverride!;
     if (_isOnline) {
+      syncAllQueueItems();
       fetchBackendData();
     }
     notifyListeners();
+  }
+
+  /// Reset to automatic network detection
+  void resetToAutoNetwork() {
+    _manualOverride = null;
+    _isOnline = (_networkStatus == NetworkStatus.online);
+    if (_isOnline) {
+      syncAllQueueItems();
+      fetchBackendData();
+    }
+    notifyListeners();
+    NetworkQualityService().checkStatus();
+  }
+
+  /// Manually force a re-check of real internet quality
+  Future<void> refreshNetworkQuality() async {
+    final status = await NetworkQualityService().checkStatus();
+    _onNetworkStatusChanged(status);
   }
 
   // --- Authentication ---

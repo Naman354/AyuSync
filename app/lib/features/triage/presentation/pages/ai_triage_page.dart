@@ -249,7 +249,7 @@ class AiTriagePage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Worker Confirmation & Override',
+                      'Review & Confirm Referral',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(width: 8),
@@ -257,6 +257,17 @@ class AiTriagePage extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                side: const BorderSide(color: Color(0xFFD1D5DB)),
+              ),
+              onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+              icon: const Icon(Icons.home_outlined, size: 18, color: Color(0xFF4B5563)),
+              label: const Text('Back to Home Dashboard', style: TextStyle(color: Color(0xFF4B5563), fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 16),
           ],

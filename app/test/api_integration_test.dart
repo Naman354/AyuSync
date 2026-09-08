@@ -6,6 +6,7 @@ import 'package:ayusync_app/core/models/triage_model.dart';
 import 'package:ayusync_app/core/models/followup_model.dart';
 import 'package:ayusync_app/core/models/sync_item_model.dart';
 import 'package:ayusync_app/core/network/api_config.dart';
+import 'package:ayusync_app/core/network/network_quality_service.dart';
 
 void main() {
   group('Backend Model Parsing & Integration Tests', () {
@@ -176,6 +177,13 @@ void main() {
     test('ApiConfig allows runtime baseUrl override', () {
       ApiConfig.setBaseUrl('http://192.168.1.100:5000');
       expect(ApiConfig.baseUrl, equals('http://192.168.1.100:5000'));
+    });
+
+    test('NetworkStatus enum defines online, poor, and offline states', () {
+      expect(NetworkStatus.values, contains(NetworkStatus.online));
+      expect(NetworkStatus.values, contains(NetworkStatus.poor));
+      expect(NetworkStatus.values, contains(NetworkStatus.offline));
+      expect(NetworkQualityService().currentStatus, isNotNull);
     });
   });
 }

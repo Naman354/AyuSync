@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/models/followup_model.dart';
+import '../../../../core/theme/app_colors.dart';
 
 class FollowUpTaskDetailsPage extends StatelessWidget {
   final FollowUpTask? task;
@@ -15,7 +16,12 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
 
     if (currentTask == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('17 Follow-up Task Details')),
+        appBar: AppBar(
+          title: const Text('Follow-up Task Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.forest,
+          elevation: 0,
+        ),
         body: const Center(child: Text('No follow-up task found')),
       );
     }
@@ -24,11 +30,12 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
     final isCompleted = currentTask.status == 'COMPLETED';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('17 Follow-up Task Details'),
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
+        title: const Text('Follow-up Task Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.forest,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -123,12 +130,12 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                     const Divider(height: 20),
                     Row(
                       children: [
-                        const Icon(Icons.badge_outlined, size: 16, color: Color(0xFF2563EB)),
+                        const Icon(Icons.badge_outlined, size: 16, color: AppColors.forest),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             '${currentTask.doctorName} • ${currentTask.doctorFacility}',
-                            style: TextStyle(fontSize: 12, color: Colors.blue.shade900, fontWeight: FontWeight.w500),
+                            style: const TextStyle(fontSize: 12, color: AppColors.forest, fontWeight: FontWeight.w600),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                           ),
@@ -177,14 +184,15 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
             ),
             const SizedBox(height: 28),
 
-            // Action Button -> 18 Record Follow-up Visit
+            // Action Button -> Record Follow-up Visit
             if (!isCompleted)
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: AppColors.forest,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
                 onPressed: () {
                   Navigator.pushNamed(
@@ -193,9 +201,9 @@ class FollowUpTaskDetailsPage extends StatelessWidget {
                     arguments: currentTask,
                   );
                 },
-                icon: const Icon(Icons.edit_calendar),
+                icon: const Icon(Icons.edit_calendar_rounded),
                 label: const Text(
-                  'Proceed to 18 Record Follow-up Visit',
+                  'Record Home Visit & Vitals',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               )

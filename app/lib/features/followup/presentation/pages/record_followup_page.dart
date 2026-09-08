@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/models/followup_model.dart';
 import '../../../../core/models/assessment_model.dart';
+import '../../../../core/theme/app_colors.dart';
 
 class RecordFollowUpPage extends StatefulWidget {
   final FollowUpTask? task;
@@ -57,7 +58,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               ? '✅ Follow-up visit synced to Doctor Web Dashboard!'
               : '💾 Follow-up visit recorded offline and queued in SQLite.',
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: AppColors.forest,
       ),
     );
 
@@ -71,11 +72,12 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
     final task = widget.task ?? (appState.followUpTasks.isNotEmpty ? appState.followUpTasks.first : null);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('18 Record Follow-up Visit'),
-        backgroundColor: const Color(0xFF2563EB),
-        foregroundColor: Colors.white,
+        title: const Text('Record Follow-up Home Visit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.forest,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
@@ -88,18 +90,18 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: AppColors.mintLight,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue.shade200),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.home_outlined, color: Color(0xFF2563EB)),
+                    const Icon(Icons.home_outlined, color: AppColors.forest),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Home Visit for: ${task?.patientName ?? "Patient"}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A)),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
                       ),
                     ),
                   ],
@@ -113,13 +115,13 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: Colors.grey.shade200),
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
                 ),
                 child: SwitchListTile(
                   title: const Text('Medication Adherence Check', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   subtitle: const Text('Is patient consuming prescribed medications on schedule?'),
                   value: _adherenceConfirmed,
-                  activeThumbColor: const Color(0xFF2563EB),
+                  activeThumbColor: AppColors.forest,
                   onChanged: (val) => setState(() => _adherenceConfirmed = val),
                 ),
               ),
@@ -134,6 +136,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                     child: TextFormField(
                       controller: _systolicController,
                       keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'BP Systolic',
                         hintText: '120',
@@ -147,6 +150,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
                     child: TextFormField(
                       controller: _diastolicController,
                       keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'BP Diastolic',
                         hintText: '80',
@@ -161,6 +165,7 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               TextFormField(
                 controller: _pulseController,
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Pulse Rate (bpm)',
                   hintText: '72',
@@ -187,10 +192,11 @@ class _RecordFollowUpPageState extends State<RecordFollowUpPage> {
               // Submit Button
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: AppColors.forest,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
                 onPressed: _isSubmitting ? null : _handleSubmit,
                 icon: _isSubmitting

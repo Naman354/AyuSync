@@ -14,6 +14,7 @@ class FacilityRoutingPage extends StatefulWidget {
 class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
   Facility? _selectedFacility;
   bool _needsAmbulance = false;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -32,14 +33,20 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
     }
   }
 
-  void _handleSubmitReferral() {
+  void _handleSubmitReferral() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
     final appState = Provider.of<AppState>(context, listen: false);
     if (_selectedFacility != null) {
       appState.selectFacility(_selectedFacility!);
     }
     appState.submitReferralCase(needsAmbulance: _needsAmbulance);
 
-    // Navigate to 15 Case Submitted as per Figma flow
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+
+    // Navigate to Case Submitted page
     Navigator.pushReplacementNamed(context, '/triage/case_submitted');
   }
 
@@ -52,6 +59,10 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text('Smart Facility Routing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
@@ -269,10 +280,18 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              onPressed: _selectedFacility == null ? null : _handleSubmitReferral,
-              icon: const Icon(Icons.send_rounded),
+              onPressed: (_selectedFacility == null || _isSubmitting) ? null : _handleSubmitReferral,
+              icon: _isSubmitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded),
               label: Text(
-                'Submit Referral Case to ${_selectedFacility?.type ?? "Facility"}',
+                _isSubmitting
+                    ? 'Submitting Referral...'
+                    : 'Submit Referral Case to ${_selectedFacility?.type ?? "Facility"}',
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
