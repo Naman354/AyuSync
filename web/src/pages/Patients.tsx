@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
+import { getAuthUser } from '../lib/auth';
 import PageShell from '../components/ui/PageShell';
 import InlineError from '../components/ui/InlineError';
 import EmptyState from '../components/ui/EmptyState';
@@ -39,7 +40,7 @@ const DEMO_PATIENTS = [
 
 
 
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   const isWorker = user.role === 'WORKER';
 
   return (

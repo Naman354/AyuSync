@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../lib/api';
+import { api } from '../lib/api';
+import { setAuthSession } from '../lib/auth';
 import { HeartPulse, Stethoscope, UserCheck, ArrowRight, Eye, EyeOff, User, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 
 export default function Login() {
@@ -44,8 +45,7 @@ export default function Login() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { phone: loginPhone, password: loginPass });
-      localStorage.setItem('ayusync_token', data.token);
-      localStorage.setItem('ayusync_user', JSON.stringify(data.user));
+      setAuthSession(data.token, data.user);
       if (data.user.role === 'WORKER') {
         navigate('/worker');
       } else if (data.user.role === 'PATIENT') {
@@ -140,6 +140,16 @@ export default function Login() {
 
           {/* Quick demo access */}
           <div className="mt-7 pt-6 border-t border-gray-200">
+            {/* Multi-Tab Demo Callout */}
+            <div className="mb-3.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-[11px] text-emerald-900 flex items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-emerald-600 shrink-0" />
+                <span className="leading-tight">
+                  <strong className="text-emerald-950 font-semibold">Multi-Tab Demo Active:</strong> Each tab runs an independent session. Open multiple tabs to demo Doctor, ASHA Worker, and Patient simultaneously.
+                </span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quick Demo Access</p>
               <button

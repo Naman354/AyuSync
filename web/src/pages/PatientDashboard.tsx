@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { getAuthUser } from '../lib/auth';
 import StatusBadge from '../components/ui/StatusBadge';
 import InlineError from '../components/ui/InlineError';
 import { ensure14DigitAbha } from './ReferralSuccess';
@@ -321,7 +322,7 @@ const NEARBY_FACILITIES = [
 ];
 
 export default function PatientDashboard() {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   const targetPatientId = user.patientId || 'pat-ramesh-kulkarni';
 
   const [patient, setPatient] = useState<any>(null);

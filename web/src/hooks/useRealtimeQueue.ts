@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { getBaseServerUrl } from '../lib/api';
+import { getAuthToken } from '../lib/auth';
 
 export function useRealtimeQueue(doctorId: string) {
   const [queue, setQueue] = useState<any[]>([]);
@@ -16,7 +17,7 @@ export function useRealtimeQueue(doctorId: string) {
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
       auth: {
-        token: localStorage.getItem('ayusync_token')
+        token: getAuthToken()
       }
     });
 

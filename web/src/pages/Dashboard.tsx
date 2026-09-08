@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import api, { getBaseServerUrl } from '../lib/api';
+import { getAuthUser, getAuthToken, updateAuthUser } from '../lib/auth';
 import PageShell from '../components/ui/PageShell';
 import StatusBadge from '../components/ui/StatusBadge';
 import { SkeletonList } from '../components/ui/SkeletonLoader';
@@ -18,7 +19,7 @@ const URGENCY_AVATAR: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   const [queue, setQueue] = useState<any[]>([]);
   const [referrals, setReferrals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,16 +80,16 @@ export default function Dashboard() {
   useEffect(() => {
     loadData();
 
-    // Ensure localStorage session maintains doctor identity when active on Doctor Dashboard
+    // Ensure session maintains doctor identity when active on Doctor Dashboard
     if (user.role === 'DOCTOR' && (!user.name || !user.name.startsWith('Dr'))) {
-      localStorage.setItem('ayusync_user', JSON.stringify({ ...user, name: 'Dr. Rajesh Deshmukh' }));
+      updateAuthUser({ ...user, name: 'Dr. Rajesh Deshmukh' });
     }
 
     // Subscribe to real-time referral events so doctor dashboard receives live submissions
     const serverUrl = getBaseServerUrl();
     const socket = io(serverUrl, {
       transports: ['websocket', 'polling'],
-      auth: { token: localStorage.getItem('ayusync_token') }
+      auth: { token: getAuthToken() }
     });
 
     socket.on('referral:created', (newRef: any) => {

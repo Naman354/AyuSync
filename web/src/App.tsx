@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { getAuthToken, getAuthUser, updateAuthUser, clearAuthSession } from './lib/auth';
 import SplashScreen from './components/ui/SplashScreen';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -48,41 +49,34 @@ function NavLink({ to, exact, children }: { to: string; exact?: boolean; childre
 
 // ─── Protected shell ─────────────────────────────────────────────────────────
 const ProtectedRoute = () => {
-  const token = localStorage.getItem('ayusync_token');
+  const token = getAuthToken();
   const location = useLocation();
   const navigate = useNavigate();
   const { isOffline, toggleOffline } = useNetworkStatus();
 
-  const [user, setUser] = useState<any>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('ayusync_user') || '{}');
-    } catch {
-      return {};
-    }
-  });
+  const [user, setUser] = useState<any>(() => getAuthUser() || {});
 
   // Automatically derive active role from current URL path or stored user
   const getRoleFromPath = (path: string): string => {
     if (path.startsWith('/worker') || path.startsWith('/intake') || path.startsWith('/followups')) return 'WORKER';
     if (path.startsWith('/patient')) return 'PATIENT';
     if (path.startsWith('/dashboard') || path.startsWith('/queue') || path.startsWith('/facilities')) return 'DOCTOR';
-    return user.role || 'DOCTOR';
+    return user?.role || 'DOCTOR';
   };
 
   const currentRole = getRoleFromPath(location.pathname);
 
-  // Synchronize localStorage and user state when role/route changes
+  // Synchronize user state when role/route changes (in this tab only)
   useEffect(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+      const stored = getAuthUser() || {};
       if (stored.role !== currentRole && !location.pathname.startsWith('/patients')) {
         let name = stored.name;
         if (currentRole === 'DOCTOR') name = 'Dr. Rajesh Deshmukh';
         else if (currentRole === 'WORKER') name = 'Sunita Patil';
         else if (currentRole === 'PATIENT') name = 'Ramesh Kulkarni';
 
-        const updated = { ...stored, role: currentRole, name };
-        localStorage.setItem('ayusync_user', JSON.stringify(updated));
+        const updated = updateAuthUser({ role: currentRole, name });
         setUser(updated);
       } else {
         setUser(stored);
@@ -138,8 +132,7 @@ const ProtectedRoute = () => {
       targetPath = '/dashboard';
     }
 
-    const updated = { ...user, role: newRole, name: newName, patientId };
-    localStorage.setItem('ayusync_user', JSON.stringify(updated));
+    const updated = updateAuthUser({ role: newRole, name: newName, patientId });
     setUser(updated);
     navigate(targetPath, { replace: true });
   };
@@ -251,11 +244,10 @@ const ProtectedRoute = () => {
 
             <button
               onClick={() => {
-                localStorage.removeItem('ayusync_token');
-                localStorage.removeItem('ayusync_user');
-                window.location.href = '/login';
+                clearAuthSession();
+                navigate('/login');
               }}
-              title="Sign out"
+              title="Sign out of this tab"
               className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
               <LogOut size={16} />
@@ -351,27 +343,27 @@ const ProtectedRoute = () => {
 };
 
 function RootRedirect() {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   if (user.role === 'WORKER') return <Navigate to="/worker" replace />;
   if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
 function DoctorRouteGuard({ children }: { children: React.ReactNode }) {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
   if (user.role === 'WORKER') return <Navigate to="/worker" replace />;
   return <>{children}</>;
 }
 
 function WorkerRouteGuard({ children }: { children: React.ReactNode }) {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
   return <>{children}</>;
 }
 
 function PatientsRouteGuard() {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   if (user.role === 'PATIENT') {
     return <Navigate to="/patient" replace />;
   }
@@ -379,7 +371,7 @@ function PatientsRouteGuard() {
 }
 
 function PatientProfileGuard() {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   if (user.role === 'PATIENT') {
     return <Navigate to="/patient" replace />;
   }

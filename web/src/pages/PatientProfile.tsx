@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import { getAuthUser } from '../lib/auth';
 import { Button } from '../components/ui/Button';
 import StatusBadge from '../components/ui/StatusBadge';
 import InlineError from '../components/ui/InlineError';
@@ -14,7 +15,7 @@ import {
 export default function PatientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
   const isWorker = user.role === 'WORKER';
 
   const [patient,          setPatient]          = useState<any>(null);
