@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, Link, useLocation } from 'react-router-dom';
 import SplashScreen from './components/ui/SplashScreen';
 import Login from './pages/Login';
@@ -21,7 +21,11 @@ import {
   UserPlus,
   RefreshCw,
   AlertTriangle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
+import { useNetworkStatus } from './lib/network';
+
 
 // ─── Shared nav link component ───────────────────────────────────────────────
 function NavLink({ to, exact, children }: { to: string; exact?: boolean; children: React.ReactNode }) {
@@ -46,6 +50,30 @@ const ProtectedRoute = () => {
   const token = localStorage.getItem('ayusync_token');
   const user   = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
   const [currentRole, setCurrentRole] = useState<string>(user.role || 'DOCTOR');
+  const { isOffline, toggleOffline } = useNetworkStatus();
+
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  useEffect(() => {
+    const onStart = () => { setSyncing(true); setSyncMsg('Syncing offline queue to central server...'); };
+    const onEnd = () => { setSyncing(false); };
+    const onSynced = (e: any) => {
+      const count = e.detail?.syncedCount || 0;
+      if (count > 0) {
+        setSyncMsg(`Synced ${count} offline record(s) successfully!`);
+        setTimeout(() => setSyncMsg(''), 4000);
+      }
+    };
+    window.addEventListener('ayusync:sync_start', onStart);
+    window.addEventListener('ayusync:sync_end', onEnd);
+    window.addEventListener('ayusync:synced', onSynced);
+    return () => {
+      window.removeEventListener('ayusync:sync_start', onStart);
+      window.removeEventListener('ayusync:sync_end', onEnd);
+      window.removeEventListener('ayusync:synced', onSynced);
+    };
+  }, []);
 
   if (!token) return <Navigate to="/login" replace />;
 
@@ -79,7 +107,7 @@ const ProtectedRoute = () => {
   return (
     <div className="min-h-screen bg-[#f8f7f3] font-sans text-gray-900">
       {/* ── Top navigation bar ── */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200">
+      <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-xs">
         <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-4 sm:px-6 gap-4">
 
           {/* Brand */}
@@ -118,11 +146,35 @@ const ProtectedRoute = () => {
 
           {/* Right side */}
           <div className="flex items-center gap-2.5 shrink-0">
+            {/* Live Realistic Offline/Online Simulation Toggle */}
+            <button
+              type="button"
+              onClick={toggleOffline}
+              title={isOffline ? 'Click to restore Online mode (auto-flushes local queue)' : 'Click to simulate Offline mode'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold shadow-xs transition-all cursor-pointer ${
+                isOffline
+                  ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
+                  : 'bg-emerald-50 border-emerald-200 text-[#1e6641] hover:bg-emerald-100'
+              }`}
+            >
+              {isOffline ? (
+                <>
+                  <WifiOff size={12} className="text-amber-600 animate-pulse shrink-0" />
+                  <span>Offline (Simulated)</span>
+                </>
+              ) : (
+                <>
+                  <Wifi size={12} className="text-[#1e6641] shrink-0" />
+                  <span>Online</span>
+                </>
+              )}
+            </button>
+
             {/* Prominent Demo Role Switcher */}
             <button
               onClick={switchRole}
               title="Click to switch role (Doctor / ASHA Health Worker / Patient)"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs text-gray-700 shadow-xs transition-all hover:border-[#1e6641]/50"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs text-gray-700 shadow-xs transition-all hover:border-[#1e6641]/50 cursor-pointer"
             >
               <span className="font-semibold text-[#1e6641] flex items-center gap-1">
                 {isWorker ? '👩‍⚕️ ASHA' : isPatient ? '🧑 Patient' : '👨‍⚕️ Doctor'}
@@ -158,12 +210,37 @@ const ProtectedRoute = () => {
                 window.location.href = '/login';
               }}
               title="Sign out"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
               <LogOut size={16} />
             </button>
           </div>
         </div>
+
+        {/* Dynamic Offline / Auto-sync Banner */}
+        {isOffline && (
+          <div className="bg-amber-500 text-white text-xs font-medium px-4 py-1.5 border-t border-amber-600 transition-all">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <WifiOff size={13} className="shrink-0 animate-pulse" />
+                <span><strong>Simulated Offline Mode:</strong> Records & intakes will be stored in local SQLite/IndexedDB queue and synced automatically on reconnection.</span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleOffline}
+                className="underline font-bold text-white hover:text-amber-100 ml-3 text-[11px] shrink-0 cursor-pointer"
+              >
+                Restore Online & Auto-Sync →
+              </button>
+            </div>
+          </div>
+        )}
+        {syncMsg && (
+          <div className="bg-[#1e6641] text-white text-xs font-medium px-4 py-1.5 flex items-center justify-center gap-2 transition-all">
+            <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
+            <span>{syncMsg}</span>
+          </div>
+        )}
       </header>
 
       {/* ── Page content ── */}

@@ -4,10 +4,11 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_URL || 'postgresql://postgres.xnewhtdoqyxljoqsxeol:LuffySenpai4312@aws-0-ap-south-1.pooler.supabase.com:5432/postgres'
+      url: process.env.DIRECT_URL || process.env.DATABASE_URL || 'postgresql://postgres.xnewhtdoqyxljoqsxeol:LuffySenpai4312@aws-0-ap-south-1.pooler.supabase.com:5432/postgres'
     }
   }
 });
+
 
 // Deterministic date anchor (around current date)
 const NOW = new Date();
