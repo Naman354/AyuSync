@@ -43,6 +43,89 @@ class _NewPatientPageState extends State<NewPatientPage> {
     'Malwadi',
   ];
 
+  // --- Demo Convenience Feature: Sample Patient Data ---
+  int _dummyProfileIndex = 0;
+
+  static const List<Map<String, String>> _dummyPatientProfiles = [
+    {
+      'name': 'Sunita Rao',
+      'age': '42',
+      'dob': '15/08/1984',
+      'gender': 'Female',
+      'phone': '9876543210',
+      'village': 'Khandala Ward 1',
+      'abha': '91-4421-8839-1092',
+    },
+    {
+      'name': 'Ramesh Kulkarni',
+      'age': '54',
+      'dob': '20/11/1971',
+      'gender': 'Male',
+      'phone': '9812345678',
+      'village': 'Bhosale Vasti',
+      'abha': '91-7782-3310-9945',
+    },
+    {
+      'name': 'Pooja Chavan',
+      'age': '29',
+      'dob': '05/03/1997',
+      'gender': 'Female',
+      'phone': '9765432109',
+      'village': 'Malwadi',
+      'abha': '91-6651-4432-8819',
+    },
+    {
+      'name': 'Anand Verma',
+      'age': '38',
+      'dob': '10/06/1988',
+      'gender': 'Male',
+      'phone': '9890123456',
+      'village': 'Khandala Ward 2',
+      'abha': '91-1234-5678-9012',
+    },
+  ];
+
+  void _fillDummyData(AppState appState) {
+    final profile = _dummyPatientProfiles[_dummyProfileIndex % _dummyPatientProfiles.length];
+    _dummyProfileIndex++;
+
+    setState(() {
+      _nameController.text = profile['name']!;
+      _ageController.text = profile['age']!;
+      _dobController.text = profile['dob']!;
+      _selectedGender = profile['gender']!;
+      _phoneController.text = profile['phone']!;
+      _villageController.text = profile['village']!;
+      _abhaController.text = profile['abha']!;
+      _fieldErrors.clear();
+    });
+
+    FocusScope.of(context).unfocus();
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${appState.translate('dummy_data_filled')}: ${profile['name']}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF2563EB),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   // --- Step 2 Controllers (Backend Assessment & Vitals Fields) ---
   final _symptomController = TextEditingController();
   String _selectedSeverity = 'MODERATE'; // MILD, MODERATE, SEVERE
@@ -594,6 +677,98 @@ class _NewPatientPageState extends State<NewPatientPage> {
           icon: Icons.fingerprint_rounded,
           textInputAction: TextInputAction.done,
         ),
+        const SizedBox(height: 20),
+        // --- Demo Quick-Action: Fill Dummy Data ---
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF93C5FD), width: 1.2),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: const ValueKey('fill_dummy_data_button'),
+              onTap: () => _fillDummyData(appState),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.auto_fix_high_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                appState.translate('fill_dummy_data'),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1E40AF),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDBEAFE),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                                ),
+                                child: const Text(
+                                  'DEMO',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1D4ED8),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            appState.translate('fill_dummy_data_desc'),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF2563EB),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.flash_on_rounded,
+                      color: Color(0xFF2563EB),
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
       ],
     );
   }
