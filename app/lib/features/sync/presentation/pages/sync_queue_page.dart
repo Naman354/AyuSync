@@ -29,10 +29,10 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Sync & Upload Successful! All local patient records uploaded to server.'),
+        SnackBar(
+          content: Text(appState.translate('sync_success_msg')),
           backgroundColor: AppColors.forest,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
         ),
       );
 
@@ -45,7 +45,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(appState.errorMessage ?? 'Sync encountered an issue. Check connection and try again.'),
+          content: Text(appState.errorMessage ?? appState.translate('sync_error_msg')),
           backgroundColor: Colors.red.shade700,
           duration: const Duration(seconds: 4),
         ),
@@ -61,7 +61,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Offline Sync Queue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('sync_queue_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -88,11 +88,13 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        appState.isOnline ? 'Network Connected (Ready to Sync)' : 'Offline (Local Cache Active)',
+                        appState.isOnline
+                            ? appState.translate('network_ready_sync')
+                            : appState.translate('offline_cache_active'),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '${items.length} Pending Mutations in SQLite Queue',
+                        appState.translate('pending_mutations_count', args: {'count': '${items.length}'}),
                         style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                       ),
                     ],
@@ -112,14 +114,14 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                       children: [
                         const Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
                         const SizedBox(height: 14),
-                        const Text(
-                          'Sync Queue is Empty',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        Text(
+                          appState.translate('sync_queue_empty'),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
-                        const Text(
-                          'All offline records are fully synchronized.',
-                          style: TextStyle(color: Colors.grey),
+                        Text(
+                          appState.translate('all_records_synced'),
+                          style: const TextStyle(color: Colors.grey),
                         ),
                         const SizedBox(height: 24),
                         if (appState.currentAssessment != null)
@@ -135,7 +137,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                               Navigator.pushReplacementNamed(context, '/triage/ai_result');
                             },
                             icon: const Icon(Icons.auto_awesome),
-                            label: const Text('Proceed to AI Clinical Triage'),
+                            label: Text(appState.translate('proceed_to_ai_triage')),
                           ),
                       ],
                     ),
@@ -248,7 +250,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                           )
                         : const Icon(Icons.cloud_upload_rounded),
                     label: Text(
-                      _isSyncing ? 'Syncing...' : 'Sync / Upload Queue Now',
+                      _isSyncing ? appState.translate('syncing_in_progress') : appState.translate('sync_now_btn'),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                   ),
@@ -265,9 +267,9 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                     ),
                     onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
                     icon: const Icon(Icons.home_outlined, size: 18),
-                    label: const Text(
-                      'Back to Home Dashboard',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    label: Text(
+                      appState.translate('back_to_dashboard'),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     ),
                   ),
                 ),

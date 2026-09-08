@@ -15,7 +15,7 @@ class CaseStatusPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Case Confirmation Slip', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('case_slip_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -44,7 +44,7 @@ class CaseStatusPage extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('AYUSYNC DIGITAL REFERRAL SLIP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF6B7280))),
+                              Text(appState.translate('digital_referral_slip'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF6B7280))),
                               const SizedBox(height: 2),
                               Text(
                                 referral?.referralId ?? 'REF-889412',
@@ -67,17 +67,21 @@ class CaseStatusPage extends StatelessWidget {
                     ),
                     const Divider(height: 24, color: Color(0xFFF3F4F6)),
 
-                    _statusRow('Citizen Name', referral?.patientName ?? patient?.name ?? 'Kamala Devi'),
+                    _statusRow(appState.translate('citizen_name_label'), referral?.patientName ?? patient?.name ?? 'Kamala Devi'),
                     const SizedBox(height: 8),
-                    _statusRow('Village / Ward', patient?.village ?? 'Rampur Ward 3'),
+                    _statusRow(appState.translate('village_ward_label'), patient?.village ?? 'Rampur Ward 3'),
                     const SizedBox(height: 8),
-                    _statusRow('ABHA ID', patient?.abhaId ?? '91-4920-1123-9901'),
+                    _statusRow(appState.translate('abha_id_label'), patient?.abhaId ?? '91-4920-1123-9901'),
                     const SizedBox(height: 8),
-                    _statusRow('Chief Complaint', referral?.chiefComplaint ?? 'Severe pyrexia with breathlessness'),
+                    _statusRow(appState.translate('chief_complaint_label'), referral?.chiefComplaint ?? 'Severe pyrexia with breathlessness'),
                     const SizedBox(height: 8),
-                    _statusRow('Assigned Facility', referral?.facility.name ?? 'Bilaspur PHC'),
+                    _statusRow(appState.translate('assigned_facility_label'), referral?.facility.name ?? 'Bilaspur PHC'),
                     const SizedBox(height: 8),
-                    _statusRow('Triage Urgency', referral?.triageUrgency ?? 'URGENT', isUrgent: true),
+                    _statusRow(
+                      appState.translate('triage_urgency_label'),
+                      appState.translate('urgency_${(referral?.triageUrgency ?? "URGENT").toLowerCase()}'),
+                      isUrgent: true,
+                    ),
 
                     if (referral?.needsAmbulance == true) ...[
                       const SizedBox(height: 14),
@@ -88,14 +92,14 @@ class CaseStatusPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: const Color(0xFFFECACA)),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.airport_shuttle_rounded, color: Color(0xFFDC2626), size: 20),
-                            SizedBox(width: 8),
+                            const Icon(Icons.airport_shuttle_rounded, color: Color(0xFFDC2626), size: 20),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '108 Emergency Ambulance Dispatched to Patient Coordinates',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                                appState.translate('ambulance_dispatched_notice'),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
                               ),
                             ),
                           ],
@@ -121,37 +125,37 @@ class CaseStatusPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.sync_alt, size: 18, color: Color(0xFF2563EB)),
-                        SizedBox(width: 8),
+                        const Icon(Icons.sync_alt, size: 18, color: Color(0xFF2563EB)),
+                        const SizedBox(width: 8),
                         Text(
-                          'Closed-Loop Continuity Status',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          appState.translate('closed_loop_status_title'),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                     const SizedBox(height: 14),
 
                     _stepTimeline(
-                      title: '1. Upstream Referral Transmitted',
-                      subtitle: 'Transmitted from ${appState.workerCenter}',
+                      title: appState.translate('step1_title'),
+                      subtitle: appState.translate('step1_desc', args: {'center': appState.workerCenter}),
                       isDone: true,
                     ),
                     _stepTimeline(
-                      title: '2. Broadcasted to Doctor Live Queue',
-                      subtitle: 'Active on Doctor Dashboard (Socket.io Realtime)',
+                      title: appState.translate('step2_title'),
+                      subtitle: appState.translate('step2_desc'),
                       isDone: true,
                     ),
                     _stepTimeline(
-                      title: '3. Facility Consultation & Treatment',
-                      subtitle: 'Patient en-route to ${referral?.facility.type ?? "Facility"}',
+                      title: appState.translate('step3_title'),
+                      subtitle: appState.translate('step3_desc', args: {'facility': referral?.facility.type ?? "Facility"}),
                       isDone: false,
                       isCurrent: true,
                     ),
                     _stepTimeline(
-                      title: '4. Downstream Counter-Referral',
-                      subtitle: 'Prescription & Follow-up tasks will route to Follow-up Tasks Inbox',
+                      title: appState.translate('step4_title'),
+                      subtitle: appState.translate('step4_desc'),
                       isDone: false,
                     ),
                   ],
@@ -173,9 +177,9 @@ class CaseStatusPage extends StatelessWidget {
                 Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
               },
               icon: const Icon(Icons.home_rounded),
-              label: const Text(
-                'Return to Home Dashboard',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              label: Text(
+                appState.translate('return_to_dashboard'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
             const SizedBox(height: 10),
@@ -190,7 +194,7 @@ class CaseStatusPage extends StatelessWidget {
                 Navigator.pushNamed(context, '/followup/inbox');
               },
               icon: const Icon(Icons.inbox_rounded, color: Color(0xFF4B5563)),
-              label: const Text('Go to Care Gaps Follow-up Inbox', style: TextStyle(color: Color(0xFF4B5563))),
+              label: Text(appState.translate('go_to_care_gaps'), style: const TextStyle(color: Color(0xFF4B5563))),
             ),
           ],
         ),

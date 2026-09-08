@@ -63,7 +63,7 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Smart Facility Routing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('smart_routing_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -81,16 +81,18 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                   children: [
                     const Icon(Icons.alt_route_rounded, color: AppColors.forest),
                     const SizedBox(width: 8),
-                    Text(
-                      'AI Routing: $urgency Level Match',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textDark),
+                    Expanded(
+                      child: Text(
+                        appState.translate('routing_match_title', args: {'level': urgency}),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textDark),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Facilities ranked dynamically by live readiness, distance, and specialist availability.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                Text(
+                  appState.translate('routing_ranking_desc'),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
               ],
             ),
@@ -153,7 +155,7 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${fac.type} • ${fac.distanceKm} km away',
+                                      '${fac.type} • ${appState.translate('distance_km_away', args: {'distance': '${fac.distanceKm}'})}',
                                       style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                                     ),
                                   ],
@@ -173,19 +175,19 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                             runSpacing: 6,
                             children: [
                               _facilityBadge(
-                                'Readiness: ${fac.readinessScore}%',
+                                appState.translate('readiness_badge', args: {'score': '${fac.readinessScore}'}),
                                 fac.readinessScore > 85 ? const Color(0xFF16A34A) : const Color(0xFFD97706),
                               ),
                               if (fac.hasSpecialist)
-                                _facilityBadge('👨‍⚕️ Specialist On Duty', const Color(0xFF0284C7)),
+                                _facilityBadge(appState.translate('specialist_on_duty'), const Color(0xFF0284C7)),
                               if (fac.hasEmergency)
-                                _facilityBadge('🚨 Emergency 24x7', const Color(0xFFDC2626)),
-                              _facilityBadge('⏳ ~${fac.waitingMinutes}m Wait', const Color(0xFF4B5563)),
+                                _facilityBadge(appState.translate('emergency_24x7'), const Color(0xFFDC2626)),
+                              _facilityBadge(appState.translate('wait_time_mins', args: {'minutes': '${fac.waitingMinutes}'}), const Color(0xFF4B5563)),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Freshness: ${fac.freshness}',
+                            appState.translate('freshness_label', args: {'freshness': fac.freshness}),
                             style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF), fontStyle: FontStyle.italic),
                           ),
                         ],
@@ -218,17 +220,17 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Request 108 Ambulance Dispatch',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                            appState.translate('ambulance_request_title'),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
                           ),
                           Text(
-                            'Dispatch emergency fleet to patient location',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                            appState.translate('ambulance_request_desc'),
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
                           ),
                         ],
                       ),
@@ -249,14 +251,14 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: const Color(0xFFFDE68A)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 14, color: Color(0xFFD97706)),
-                        SizedBox(width: 6),
+                        const Icon(Icons.info_outline, size: 14, color: Color(0xFFD97706)),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            '108 Emergency fleet will receive GPS coordinates immediately upon referral.',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                            appState.translate('ambulance_gps_notice'),
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -290,8 +292,8 @@ class _FacilityRoutingPageState extends State<FacilityRoutingPage> {
                   : const Icon(Icons.send_rounded),
               label: Text(
                 _isSubmitting
-                    ? 'Submitting Referral...'
-                    : 'Submit Referral Case to ${_selectedFacility?.type ?? "Facility"}',
+                    ? appState.translate('submitting_referral')
+                    : appState.translate('submit_referral_to', args: {'facility': _selectedFacility?.type ?? "Facility"}),
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),

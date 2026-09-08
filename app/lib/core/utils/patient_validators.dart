@@ -150,13 +150,13 @@ class PatientValidators {
       return 'Phone number must be exactly 10 digits';
     }
 
-    if (!RegExp(r'^[6-9]').hasMatch(digits)) {
-      return 'Mobile number must start with 6, 7, 8, or 9';
-    }
-
-    // Check for repetitive bogus numbers (e.g. 0000000000, 1111111111)
+    // Check for repetitive bogus numbers (e.g. 0000000000, 1111111111, 9999999999)
     if (RegExp(r'^(\d)\1{9}$').hasMatch(digits)) {
       return 'Please enter a valid active mobile number';
+    }
+
+    if (!RegExp(r'^[6-9]').hasMatch(digits)) {
+      return 'Mobile number must start with 6, 7, 8, or 9';
     }
 
     return null;

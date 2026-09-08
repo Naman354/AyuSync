@@ -28,9 +28,9 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Search Patients',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.forest),
+        title: Text(
+          appState.translate('search_patients_title'),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.forest),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
@@ -60,9 +60,9 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
                     child: TextField(
                       controller: _searchController,
                       style: const TextStyle(fontSize: 14, color: AppColors.textDark, fontWeight: FontWeight.w500),
-                      decoration: const InputDecoration(
-                        hintText: 'Search by name, phone, village, ABHA...',
-                        hintStyle: TextStyle(fontSize: 13, color: Color(0xFF527C61)),
+                      decoration: InputDecoration(
+                        hintText: appState.translate('search_patients_hint'),
+                        hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF527C61)),
                         border: InputBorder.none,
                         isDense: true,
                       ),
@@ -86,12 +86,17 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
             padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 10.0),
             child: Row(
               children: [
-                Text(
-                  '${results.length} Patients in Local Database',
-                  style: const TextStyle(fontSize: 13, color: AppColors.textMedium, fontWeight: FontWeight.w600),
+                Expanded(
+                  child: Text(
+                    appState.translate('patients_count_local', args: {'count': '${results.length}'}),
+                    style: const TextStyle(fontSize: 13, color: AppColors.textMedium, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
-                const Text('Tap to view History', style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+                Text(
+                  appState.translate('tap_to_view_history'),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textLight),
+                ),
               ],
             ),
           ),
@@ -105,15 +110,21 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
                       children: [
                         Icon(Icons.person_search_rounded, size: 64, color: AppColors.textLight.withValues(alpha: 0.5)),
                         const SizedBox(height: 12),
-                        Text(
-                          'No patients found matching "$_searchQuery"',
-                          style: const TextStyle(color: AppColors.textMedium, fontSize: 14),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _searchQuery.isNotEmpty
+                                ? appState.translate('no_patients_match', args: {'query': _searchQuery})
+                                : appState.translate('no_patients_found'),
+                            style: const TextStyle(color: AppColors.textMedium, fontSize: 14),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                         const SizedBox(height: 18),
                         ElevatedButton.icon(
                           onPressed: () => Navigator.pushNamed(context, '/new-patient'),
                           icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                          label: const Text('Register New Patient'),
+                          label: Text(appState.translate('action_register')),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.forest,
                             foregroundColor: Colors.white,
@@ -131,6 +142,11 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
                     itemBuilder: (context, index) {
                       final patient = results[index];
                       final assessments = appState.getAssessmentsForPatient(patient.id);
+                      final genderText = patient.gender.toLowerCase() == 'male'
+                          ? appState.translate('gender_male')
+                          : (patient.gender.toLowerCase() == 'female'
+                              ? appState.translate('gender_female')
+                              : appState.translate('gender_other'));
 
                       return Container(
                         decoration: BoxDecoration(
@@ -167,14 +183,20 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${patient.age} yrs • ${patient.gender} • ${patient.village}',
+                                        appState.translate('patient_details_subtitle', args: {
+                                          'age': '${patient.age}',
+                                          'gender': genderText,
+                                          'village': patient.village,
+                                        }),
                                         style: const TextStyle(fontSize: 12, color: AppColors.textMedium, fontWeight: FontWeight.w500),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         assessments.isNotEmpty
-                                            ? 'Last Assessed: ${assessments.first.primarySymptom}'
-                                            : 'No previous encounters recorded',
+                                            ? appState.translate('last_assessed', args: {
+                                                'symptom': assessments.first.primarySymptom,
+                                              })
+                                            : appState.translate('no_previous_encounters'),
                                         style: const TextStyle(fontSize: 11, color: AppColors.forest, fontWeight: FontWeight.w600),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -197,7 +219,7 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
         backgroundColor: AppColors.forest,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.person_add_alt_1_rounded),
-        label: const Text('New Patient', style: TextStyle(fontWeight: FontWeight.bold)),
+        label: Text(appState.translate('action_register'), style: const TextStyle(fontWeight: FontWeight.bold)),
         onPressed: () {
           Navigator.pushNamed(context, '/new-patient');
         },

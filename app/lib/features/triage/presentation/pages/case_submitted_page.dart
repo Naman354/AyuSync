@@ -14,7 +14,7 @@ class CaseSubmittedPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Referral Dispatched', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(appState.translate('referral_dispatched_title'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -50,14 +50,14 @@ class CaseSubmittedPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
-                        'Referral Dispatched Successfully!',
+                      Text(
+                        appState.translate('referral_dispatched_heading'),
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Case transmitted to ${referral?.facility.name ?? "Receiving Facility"} and placed on Doctor Live Queue.',
+                        appState.translate('referral_transmitted_desc', args: {'facility': referral?.facility.name ?? 'Receiving Facility'}),
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 14, color: Color(0xFF4B5563), height: 1.4),
                       ),
@@ -80,7 +80,7 @@ class CaseSubmittedPage extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            const Text('Official Referral Tracking ID', style: TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600)),
+                            Text(appState.translate('referral_tracking_id'), style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 4),
                             Text(
                               referral?.referralId ?? 'REF-889412',
@@ -90,7 +90,7 @@ class CaseSubmittedPage extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Patient:', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                                Text(appState.translate('patient_label'), style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
                                 Text(referral?.patientName ?? '-', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                               ],
                             ),
@@ -98,7 +98,7 @@ class CaseSubmittedPage extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Facility:', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                                Text(appState.translate('facility_label'), style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
                                 Text(referral?.facility.name ?? 'District Hospital', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                               ],
                             ),
@@ -106,13 +106,15 @@ class CaseSubmittedPage extends StatelessWidget {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Triage Urgency:', style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
+                                Text(appState.translate('triage_urgency_label'), style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
                                 Text(
-                                  referral?.triageUrgency ?? 'PRIORITY',
+                                  referral?.triageUrgency != null
+                                      ? appState.translate('urgency_${referral!.triageUrgency.toLowerCase()}')
+                                      : appState.translate('urgency_priority'),
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: (referral?.triageUrgency == 'EMERGENCY' || referral?.triageUrgency == 'CRITICAL')
+                                    color: (referral?.triageUrgency == 'EMERGENCY' || referral?.triageUrgency == 'CRITICAL' || referral?.triageUrgency == 'URGENT')
                                         ? const Color(0xFFDC2626)
                                         : const Color(0xFFD97706),
                                   ),
@@ -137,9 +139,9 @@ class CaseSubmittedPage extends StatelessWidget {
                           Navigator.pushReplacementNamed(context, '/triage/case_status');
                         },
                         icon: const Icon(Icons.receipt_long_rounded),
-                        label: const Text(
-                          'View Referral Slip & Live Status',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        label: Text(
+                          appState.translate('view_referral_slip'),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -156,9 +158,9 @@ class CaseSubmittedPage extends StatelessWidget {
                           Navigator.pushNamedAndRemoveUntil(context, '/dashboard', (route) => false);
                         },
                         icon: const Icon(Icons.home_rounded),
-                        label: const Text(
-                          'Return to Home Dashboard',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        label: Text(
+                          appState.translate('return_to_dashboard'),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                         ),
                       ),
                     ],

@@ -42,7 +42,7 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Review & Confirm Referral', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
+        title: Text(appState.translate('review_confirm_referral'), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.forest,
         elevation: 0,
@@ -56,14 +56,14 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'ASHA Clinical Review & Confirmation',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
+            Text(
+              appState.translate('worker_confirm_title'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Confirm or adjust the triage urgency level based on your direct in-person evaluation of the patient.',
-              style: TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.4),
+            Text(
+              appState.translate('worker_confirm_subtitle'),
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 18),
 
@@ -81,7 +81,10 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'AI Triage Suggestion: ${triage?.urgencyLevel ?? "PRIORITY"} (Score: ${triage?.urgencyScore ?? 50}/100)',
+                      appState.translate('ai_suggestion_banner', args: {
+                        'level': appState.translate('urgency_${(triage?.urgencyLevel ?? "PRIORITY").toLowerCase()}'),
+                        'score': '${triage?.urgencyScore ?? 50}',
+                      }),
                       style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textDark, fontSize: 13),
                     ),
                   ),
@@ -90,30 +93,30 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
             ),
             const SizedBox(height: 20),
 
-            const Text(
-              'Confirmed Referral Urgency Level',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textDark),
+            Text(
+              appState.translate('confirmed_urgency_title'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textDark),
             ),
             const SizedBox(height: 10),
 
             // Urgency Selector Radio Tiles
             _urgencyOption(
-              title: 'ROUTINE (Low Risk)',
-              subtitle: 'Sub-Centre follow-up / outpatient routine check',
+              title: appState.translate('urgency_routine_title'),
+              subtitle: appState.translate('urgency_routine_desc'),
               value: 'ROUTINE',
               color: AppColors.lowGreen,
             ),
             const SizedBox(height: 10),
             _urgencyOption(
-              title: 'PRIORITY (Moderate Risk)',
-              subtitle: 'Same-day clinical evaluation at Primary Health Centre (PHC)',
+              title: appState.translate('urgency_priority_title'),
+              subtitle: appState.translate('urgency_priority_desc'),
               value: 'PRIORITY',
               color: AppColors.moderateOrange,
             ),
             const SizedBox(height: 10),
             _urgencyOption(
-              title: 'URGENT (Critical Risk)',
-              subtitle: 'Immediate referral to CHC / Emergency Specialist',
+              title: appState.translate('urgency_urgent_title'),
+              subtitle: appState.translate('urgency_urgent_desc'),
               value: 'URGENT',
               color: AppColors.criticalRed,
             ),
@@ -125,8 +128,8 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
               maxLines: 3,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark),
               decoration: InputDecoration(
-                labelText: 'ASHA Clinical Notes & Remarks',
-                hintText: 'Enter clinical observations or notes for the receiving doctor...',
+                labelText: appState.translate('worker_notes_label'),
+                hintText: appState.translate('worker_notes_hint'),
                 prefixIcon: const Icon(Icons.edit_note_rounded, color: AppColors.forest),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFB8C8BD))),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -145,9 +148,9 @@ class _WorkerConfirmationPageState extends State<WorkerConfirmationPage> {
               ),
               onPressed: _handleConfirm,
               icon: const Icon(Icons.local_hospital_outlined),
-              label: const Text(
-                'Confirm & Choose Referral Facility',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              label: Text(
+                appState.translate('confirm_choose_facility'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
           ],

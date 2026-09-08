@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/patient_model.dart';
 import '../../../../core/models/assessment_model.dart';
 import '../../../../core/utils/patient_validators.dart';
+import '../../../../core/services/voice_recognition_service.dart';
 import 'registration_success_page.dart';
 
 class NewPatientPage extends StatefulWidget {
@@ -48,6 +49,11 @@ class _NewPatientPageState extends State<NewPatientPage> {
   int _durationDays = 3;
   final _notesController = TextEditingController();
 
+  // Voice-to-Text Service (Configured for English recognition)
+  final VoiceRecognitionService _voiceService = VoiceRecognitionService();
+  bool _isListening = false;
+  String _speechBaseText = '';
+
   // Vitals
   final _tempController = TextEditingController(text: '98.6');
   final _systolicController = TextEditingController(text: '120');
@@ -57,6 +63,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
 
   @override
   void dispose() {
+    _voiceService.cancelListening();
     _nameController.dispose();
     _ageController.dispose();
     _dobController.dispose();
@@ -73,34 +80,49 @@ class _NewPatientPageState extends State<NewPatientPage> {
     super.dispose();
   }
 
-  bool _validateStep1() {
+  String? _localizeError(AppState appState, String? err) {
+    if (err == null) return null;
+    if (err.contains('full name') || err.contains('patient name')) return appState.translate('err_name_required');
+    if (err.contains('2 characters')) return appState.translate('err_name_min');
+    if (err.contains('letters')) return appState.translate('err_name_letters');
+    if (err.contains('numbers')) return appState.translate('err_name_numbers');
+    if (err.contains('age or') || err.contains('date of birth or')) return appState.translate('err_age_or_dob');
+    if (err.contains('between 0 and 125')) return appState.translate('err_age_range');
+    if (err.contains('10-digit') || err.contains('valid 10-digit')) return appState.translate('err_phone_required');
+    if (err.contains('start with 6')) return appState.translate('err_phone_prefix');
+    if (err.contains('village')) return appState.translate('err_village_required');
+    if (err.contains('primary') || err.contains('symptom')) return appState.translate('err_symptom_required');
+    return err;
+  }
+
+  bool _validateStep1(AppState appState) {
     final errors = <String, String>{};
 
     final nameErr = PatientValidators.validateName(_nameController.text);
-    if (nameErr != null) errors['name'] = nameErr;
+    if (nameErr != null) errors['name'] = _localizeError(appState, nameErr)!;
 
     final ageText = _ageController.text.trim();
     final dobText = _dobController.text.trim();
 
     if (ageText.isEmpty && dobText.isEmpty) {
-      errors['age'] = 'Please enter age or select date of birth';
-      errors['dob'] = 'Please enter date of birth or age';
+      errors['age'] = appState.translate('err_age_or_dob');
+      errors['dob'] = appState.translate('err_age_or_dob');
     } else {
       if (ageText.isNotEmpty) {
         final ageErr = PatientValidators.validateAge(ageText);
-        if (ageErr != null) errors['age'] = ageErr;
+        if (ageErr != null) errors['age'] = _localizeError(appState, ageErr)!;
       }
       if (dobText.isNotEmpty) {
         final dobErr = PatientValidators.validateDob(dobText);
-        if (dobErr != null) errors['dob'] = dobErr;
+        if (dobErr != null) errors['dob'] = _localizeError(appState, dobErr)!;
       }
     }
 
     final phoneErr = PatientValidators.validatePhone(_phoneController.text);
-    if (phoneErr != null) errors['phone'] = phoneErr;
+    if (phoneErr != null) errors['phone'] = _localizeError(appState, phoneErr)!;
 
     final villageErr = PatientValidators.validateVillage(_villageController.text);
-    if (villageErr != null) errors['village'] = villageErr;
+    if (villageErr != null) errors['village'] = _localizeError(appState, villageErr)!;
 
     setState(() {
       _fieldErrors.clear();
@@ -114,24 +136,24 @@ class _NewPatientPageState extends State<NewPatientPage> {
     return true;
   }
 
-  void _onNextStep() {
-    if (!_validateStep1()) return;
+  void _onNextStep(AppState appState) {
+    if (!_validateStep1(appState)) return;
 
     FocusScope.of(context).unfocus();
     setState(() => _currentStep = 2);
   }
 
-  bool _validateStep2() {
+  bool _validateStep2(AppState appState) {
     final errors = <String, String>{};
 
     final symptomErr = PatientValidators.validatePrimarySymptom(_symptomController.text);
-    if (symptomErr != null) errors['symptom'] = symptomErr;
+    if (symptomErr != null) errors['symptom'] = _localizeError(appState, symptomErr)!;
 
     final durationErr = PatientValidators.validateDurationDays(_durationDays);
-    if (durationErr != null) errors['duration'] = durationErr;
+    if (durationErr != null) errors['duration'] = _localizeError(appState, durationErr)!;
 
     final notesErr = PatientValidators.validateNotes(_notesController.text);
-    if (notesErr != null) errors['notes'] = notesErr;
+    if (notesErr != null) errors['notes'] = _localizeError(appState, notesErr)!;
 
     setState(() {
       _fieldErrors.remove('symptom');
@@ -163,6 +185,63 @@ class _NewPatientPageState extends State<NewPatientPage> {
         margin: const EdgeInsets.all(16),
       ),
     );
+  }
+
+  Future<void> _toggleVoiceInput(AppState appState) async {
+    if (_isListening) {
+      await _voiceService.stopListening();
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    _speechBaseText = _symptomController.text.trim();
+
+    setState(() => _isListening = true);
+
+    final started = await _voiceService.startListening(
+      onResult: (recognizedWords, isFinal) {
+        if (!mounted) return;
+        setState(() {
+          if (recognizedWords.trim().isNotEmpty) {
+            final combined = _speechBaseText.isEmpty
+                ? recognizedWords.trim()
+                : '$_speechBaseText ${recognizedWords.trim()}';
+            _symptomController.text = combined;
+            _symptomController.selection = TextSelection.fromPosition(
+              TextPosition(offset: combined.length),
+            );
+            _clearError('symptom');
+          }
+          if (isFinal) {
+            _isListening = false;
+          }
+        });
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        final lower = err.toLowerCase();
+        if (lower.contains('permission') || lower.contains('denied') || lower.contains('microphone')) {
+          _showError(appState.translate('voice_permission_denied'));
+        } else if (lower.contains('not available') || lower.contains('unavailable')) {
+          _showError(appState.translate('voice_not_available'));
+        } else {
+          _showError(appState.translate('voice_error', args: {'error': err}));
+        }
+      },
+      onDone: () {
+        if (mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+
+    if (!started && mounted) {
+      setState(() => _isListening = false);
+    }
   }
 
   Future<void> _pickDob() async {
@@ -218,20 +297,9 @@ class _NewPatientPageState extends State<NewPatientPage> {
   Future<void> _onSavePatient(AppState appState) async {
     if (_isSubmitting) return;
 
-    if (!_validateStep2()) return;
+    if (!_validateStep2(appState)) return;
 
     setState(() => _isSubmitting = true);
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const PopScope(
-        canPop: false,
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.forest),
-        ),
-      ),
-    );
 
     try {
       final parsedAge = int.tryParse(_ageController.text.trim()) ??
@@ -239,7 +307,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
           30;
       final formattedPhone = PatientValidators.normalizePhone(_phoneController.text);
 
-      // 1. Register Patient with strictly backend fields
+      // 1. Instant local-first patient registration (persists to SQLite immediately & kicks off non-blocking background sync)
       final patient = await appState.registerPatient(
         name: _nameController.text.trim(),
         age: parsedAge,
@@ -250,7 +318,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
         abhaId: _abhaController.text.trim().isNotEmpty ? _abhaController.text.trim() : null,
       );
 
-      // 2. Register Vitals & Symptoms
+      // 2. Instant local-first vitals & clinical assessment registration
       final vitals = Vitals(
         temperature: double.tryParse(_tempController.text.trim()),
         systolicBp: int.tryParse(_systolicController.text.trim()),
@@ -269,9 +337,9 @@ class _NewPatientPageState extends State<NewPatientPage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop(); // dismiss loading
       setState(() => _isSubmitting = false);
 
+      // Instant transition to RegistrationSuccessPage with zero waiting delay
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -280,14 +348,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Saved with local sync queue: ${e.toString().replaceAll("Exception: ", "")}'),
-          backgroundColor: AppColors.forest,
-        ),
-      );
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -307,9 +368,16 @@ class _NewPatientPageState extends State<NewPatientPage> {
     }
   }
 
-  int _calculateAgeFromDob(String dob) {
-    return PatientValidators.calculateAgeFromDob(dob) ?? 30;
-  }
+  static const List<Map<String, String>> _quickSymptomDefs = [
+    {'id': 'High Fever', 'key': 'symptom_high_fever'},
+    {'id': 'Severe Breathlessness', 'key': 'symptom_breathlessness'},
+    {'id': 'Persistent Cough', 'key': 'symptom_cough'},
+    {'id': 'Chest Pain', 'key': 'symptom_chest_pain'},
+    {'id': 'Dizziness / Syncope', 'key': 'symptom_dizziness'},
+    {'id': 'Abdominal Pain', 'key': 'symptom_abdominal_pain'},
+    {'id': 'Severe Headache', 'key': 'symptom_headache'},
+    {'id': 'Vomiting / Diarrhea', 'key': 'symptom_vomiting'},
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -320,11 +388,11 @@ class _NewPatientPageState extends State<NewPatientPage> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildAppBar(),
+            _buildAppBar(appState),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12.0),
-                child: _currentStep == 1 ? _buildStep1Demographics() : _buildStep2Assessment(),
+                child: _currentStep == 1 ? _buildStep1Demographics(appState) : _buildStep2Assessment(appState),
               ),
             ),
             _buildBottomNav(appState),
@@ -334,7 +402,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
     );
   }
 
-  Widget _buildAppBar() {
+  Widget _buildAppBar(AppState appState) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       color: Colors.white,
@@ -354,17 +422,27 @@ class _NewPatientPageState extends State<NewPatientPage> {
             child: Column(
               children: [
                 Text(
-                  _currentStep == 1 ? 'New Citizen Registration' : 'Symptoms & Baseline Vitals',
+                  _currentStep == 1
+                      ? appState.translate('new_citizen_registration')
+                      : appState.translate('step_2_title'),
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                     color: AppColors.forest,
                   ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _currentStep == 1 ? 'Step 1 of 2 · Citizen Demographics' : 'Step 2 of 2 · Vitals & Clinical Intake',
+                  _currentStep == 1
+                      ? appState.translate('step_1_subtitle')
+                      : appState.translate('step_2_subtitle'),
                   style: const TextStyle(fontSize: 12, color: AppColors.textLight, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -376,16 +454,16 @@ class _NewPatientPageState extends State<NewPatientPage> {
   }
 
   // --- Step 1: Backend Patient Demographics ---
-  Widget _buildStep1Demographics() {
+  Widget _buildStep1Demographics(AppState appState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Citizen Demographics', Icons.person_outline_rounded),
+        _buildSectionHeader(appState.translate('step_1_title'), Icons.person_outline_rounded),
         const SizedBox(height: 12),
         _buildTextField(
           controller: _nameController,
-          label: 'Full Name *',
-          hint: 'e.g. Ramesh Patel',
+          label: appState.translate('full_name'),
+          hint: appState.translate('hint_full_name'),
           icon: Icons.badge_outlined,
           textInputAction: TextInputAction.next,
           errorText: _fieldErrors['name'],
@@ -398,7 +476,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
               flex: 1,
               child: _buildTextField(
                 controller: _ageController,
-                label: 'Age (Yrs) *',
+                label: appState.translate('age_years'),
                 hint: 'e.g. 45',
                 icon: Icons.cake_outlined,
                 keyboardType: TextInputType.number,
@@ -420,7 +498,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
               flex: 1,
               child: _buildTextField(
                 controller: _dobController,
-                label: 'DOB (DD/MM/YYYY)',
+                label: appState.translate('dob_label'),
                 hint: '01/01/1980',
                 icon: Icons.calendar_today_outlined,
                 textInputAction: TextInputAction.next,
@@ -443,24 +521,24 @@ class _NewPatientPageState extends State<NewPatientPage> {
           ],
         ),
         const SizedBox(height: 14),
-        const Text(
-          'Gender *',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
+        Text(
+          appState.translate('gender_label'),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            _genderOption('Female', Icons.female_rounded),
+            _genderOption('Female', appState.translate('gender_female'), Icons.female_rounded),
             const SizedBox(width: 10),
-            _genderOption('Male', Icons.male_rounded),
+            _genderOption('Male', appState.translate('gender_male'), Icons.male_rounded),
             const SizedBox(width: 10),
-            _genderOption('Other', Icons.transgender_rounded),
+            _genderOption('Other', appState.translate('gender_other'), Icons.transgender_rounded),
           ],
         ),
         const SizedBox(height: 14),
         _buildTextField(
           controller: _phoneController,
-          label: 'Mobile Phone Number *',
+          label: appState.translate('mobile_phone'),
           hint: '98765 43210',
           icon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
@@ -471,7 +549,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
         const SizedBox(height: 14),
         _buildTextField(
           controller: _villageController,
-          label: 'Village / Ward *',
+          label: appState.translate('village_ward'),
           hint: 'e.g. Khandala Ward 1',
           icon: Icons.location_on_outlined,
           textInputAction: TextInputAction.next,
@@ -511,7 +589,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
         const SizedBox(height: 14),
         _buildTextField(
           controller: _abhaController,
-          label: 'ABHA Number (Optional)',
+          label: appState.translate('abha_number'),
           hint: '91-XXXX-XXXX-XXXX',
           icon: Icons.fingerprint_rounded,
           textInputAction: TextInputAction.done,
@@ -520,11 +598,11 @@ class _NewPatientPageState extends State<NewPatientPage> {
     );
   }
 
-  Widget _genderOption(String gender, IconData icon) {
-    final isSelected = _selectedGender == gender;
+  Widget _genderOption(String genderValue, String displayLabel, IconData icon) {
+    final isSelected = _selectedGender == genderValue;
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _selectedGender = gender),
+        onTap: () => setState(() => _selectedGender = genderValue),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -540,13 +618,18 @@ class _NewPatientPageState extends State<NewPatientPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 18, color: isSelected ? Colors.white : AppColors.forest),
-              const SizedBox(width: 6),
-              Text(
-                gender,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : AppColors.forest,
+              const SizedBox(width: 4),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    displayLabel,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isSelected ? Colors.white : AppColors.forest,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -573,30 +656,26 @@ class _NewPatientPageState extends State<NewPatientPage> {
   }
 
   // --- Step 2: Backend Assessment (Symptoms & Vitals) ---
-  Widget _buildStep2Assessment() {
+  Widget _buildStep2Assessment(AppState appState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Chief Clinical Complaint', Icons.healing_outlined),
+        _buildSectionHeader(appState.translate('chief_complaint'), Icons.healing_outlined),
         const SizedBox(height: 8),
-        const Text('Quick Symptom Tap to Add:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563))),
+        Text(
+          appState.translate('quick_symptoms_title'),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4B5563)),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: [
-            'High Fever',
-            'Severe Breathlessness',
-            'Persistent Cough',
-            'Chest Pain',
-            'Dizziness / Syncope',
-            'Abdominal Pain',
-            'Severe Headache',
-            'Vomiting / Diarrhea',
-          ].map((symptom) {
-            final isContained = _isSymptomSelected(symptom);
+          children: _quickSymptomDefs.map((symItem) {
+            final symptomId = symItem['id']!;
+            final symptomLabel = appState.translate(symItem['key']!);
+            final isContained = _isSymptomSelected(symptomId);
             return InkWell(
-              onTap: () => _toggleQuickSymptom(symptom),
+              onTap: () => _toggleQuickSymptom(symptomId),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
@@ -605,7 +684,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
                   border: Border.all(color: AppColors.forest.withValues(alpha: 0.25)),
                 ),
                 child: Text(
-                  symptom,
+                  symptomLabel,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -619,17 +698,119 @@ class _NewPatientPageState extends State<NewPatientPage> {
         const SizedBox(height: 12),
         _buildTextField(
           controller: _symptomController,
-          label: 'Primary Symptom *',
-          hint: 'e.g. High grade fever with chills & cough',
+          label: appState.translate('primary_symptom'),
+          hint: appState.translate('hint_primary_symptom'),
           icon: Icons.sick_outlined,
           maxLines: 2,
           textInputAction: TextInputAction.next,
           errorText: _fieldErrors['symptom'],
+          suffixIcon: Padding(
+            padding: const EdgeInsets.only(right: 6.0),
+            child: IconButton(
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _isListening
+                    ? Container(
+                        key: const ValueKey('mic_active'),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFDC2626).withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+                      )
+                    : Container(
+                        key: const ValueKey('mic_idle'),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.mintLight,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.forest.withValues(alpha: 0.3)),
+                        ),
+                        child: const Icon(Icons.mic_none_rounded, color: AppColors.forest, size: 20),
+                      ),
+              ),
+              tooltip: _isListening
+                  ? appState.translate('voice_tap_to_stop')
+                  : appState.translate('voice_input_tooltip'),
+              onPressed: () => _toggleVoiceInput(appState),
+            ),
+          ),
           onChanged: (_) {
             _clearError('symptom');
             setState(() {});
           },
         ),
+        if (_isListening) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFDC2626).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFDC2626)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    appState.translate('voice_listening'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFDC2626),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: () => _toggleVoiceInput(appState),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDC2626),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.stop_rounded, color: Colors.white, size: 14),
+                        const SizedBox(width: 2),
+                        Text(
+                          appState.translate('voice_tap_to_stop'),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         Row(
           children: [
@@ -638,7 +819,10 @@ class _NewPatientPageState extends State<NewPatientPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Severity *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.forest)),
+                  Text(
+                    appState.translate('severity_label'),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.forest),
+                  ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<String>(
                     initialValue: _selectedSeverity,
@@ -653,10 +837,10 @@ class _NewPatientPageState extends State<NewPatientPage> {
                         borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
                       ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'MILD', child: Text('🟢 Mild')),
-                      DropdownMenuItem(value: 'MODERATE', child: Text('🟠 Moderate')),
-                      DropdownMenuItem(value: 'SEVERE', child: Text('🔴 Severe')),
+                    items: [
+                      DropdownMenuItem(value: 'MILD', child: Text(appState.translate('severity_mild'))),
+                      DropdownMenuItem(value: 'MODERATE', child: Text(appState.translate('severity_moderate'))),
+                      DropdownMenuItem(value: 'SEVERE', child: Text(appState.translate('severity_severe'))),
                     ],
                     onChanged: (val) {
                       if (val != null) setState(() => _selectedSeverity = val);
@@ -671,7 +855,10 @@ class _NewPatientPageState extends State<NewPatientPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Duration (Days) *', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.forest)),
+                  Text(
+                    appState.translate('duration_label'),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.forest),
+                  ),
                   const SizedBox(height: 6),
                   DropdownButtonFormField<int>(
                     initialValue: _durationDays,
@@ -687,7 +874,10 @@ class _NewPatientPageState extends State<NewPatientPage> {
                       ),
                     ),
                     items: [1, 2, 3, 4, 5, 7, 10, 14].map((d) {
-                      return DropdownMenuItem(value: d, child: Text('$d Days'));
+                      return DropdownMenuItem(
+                        value: d,
+                        child: Text(appState.translate('days_unit', args: {'count': '$d'})),
+                      );
                     }).toList(),
                     onChanged: (val) {
                       if (val != null) setState(() => _durationDays = val);
@@ -699,14 +889,14 @@ class _NewPatientPageState extends State<NewPatientPage> {
           ],
         ),
         const SizedBox(height: 20),
-        _buildSectionHeader('Objective Baseline Vitals', Icons.monitor_heart_outlined),
+        _buildSectionHeader(appState.translate('baseline_vitals'), Icons.monitor_heart_outlined),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
               child: _buildTextField(
                 controller: _tempController,
-                label: 'Temp (°F)',
+                label: appState.translate('temp_label'),
                 hint: '98.6',
                 icon: Icons.thermostat_outlined,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -717,7 +907,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
             Expanded(
               child: _buildTextField(
                 controller: _spo2Controller,
-                label: 'SpO2 (%)',
+                label: appState.translate('spo2_label'),
                 hint: '98',
                 icon: Icons.air_outlined,
                 keyboardType: TextInputType.number,
@@ -732,7 +922,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
             Expanded(
               child: _buildTextField(
                 controller: _systolicController,
-                label: 'BP Systolic',
+                label: appState.translate('bp_systolic'),
                 hint: '120',
                 icon: Icons.speed_outlined,
                 keyboardType: TextInputType.number,
@@ -743,7 +933,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
             Expanded(
               child: _buildTextField(
                 controller: _diastolicController,
-                label: 'BP Diastolic',
+                label: appState.translate('bp_diastolic'),
                 hint: '80',
                 icon: Icons.speed_outlined,
                 keyboardType: TextInputType.number,
@@ -755,7 +945,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
         const SizedBox(height: 12),
         _buildTextField(
           controller: _pulseController,
-          label: 'Pulse Rate (bpm)',
+          label: appState.translate('pulse_rate'),
           hint: '72',
           icon: Icons.favorite_border_rounded,
           keyboardType: TextInputType.number,
@@ -764,8 +954,8 @@ class _NewPatientPageState extends State<NewPatientPage> {
         const SizedBox(height: 14),
         _buildTextField(
           controller: _notesController,
-          label: 'Clinical Notes (Optional)',
-          hint: 'e.g. Known hypertensive, missed medication.',
+          label: appState.translate('clinical_notes'),
+          hint: appState.translate('hint_clinical_notes'),
           icon: Icons.notes_outlined,
           maxLines: 2,
           textInputAction: TextInputAction.done,
@@ -891,7 +1081,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               ),
-              child: const Text('Back', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(appState.translate('back'), style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           if (_currentStep > 1) const SizedBox(width: 12),
           Expanded(
@@ -900,7 +1090,7 @@ class _NewPatientPageState extends State<NewPatientPage> {
                   ? null
                   : () {
                       if (_currentStep == 1) {
-                        _onNextStep();
+                        _onNextStep(appState);
                       } else {
                         _onSavePatient(appState);
                       }
@@ -918,9 +1108,14 @@ class _NewPatientPageState extends State<NewPatientPage> {
                       height: 22,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
                     )
-                  : Text(
-                      _currentStep == 1 ? 'Continue to Vitals & Symptoms' : 'Save Patient & Assess',
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _currentStep == 1
+                            ? appState.translate('continue_to_vitals')
+                            : appState.translate('save_patient_assess'),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
                     ),
             ),
           ),

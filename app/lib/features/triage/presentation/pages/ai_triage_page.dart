@@ -16,7 +16,7 @@ class AiTriagePage extends StatelessWidget {
     if (triage == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('AI Triage & Reasoning', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.forest)),
+          title: Text(appState.translate('ai_triage_title'), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.forest)),
           backgroundColor: Colors.white,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.forest, size: 20),
@@ -29,12 +29,12 @@ class AiTriagePage extends StatelessWidget {
             children: [
               const Icon(Icons.psychology_outlined, size: 64, color: AppColors.textLight),
               const SizedBox(height: 12),
-              const Text('No triage output available for this session.', style: TextStyle(color: AppColors.textMedium)),
+              Text(appState.translate('no_triage_output'), style: const TextStyle(color: AppColors.textMedium)),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.forest, foregroundColor: Colors.white),
-                child: const Text('Return to Dashboard'),
+                child: Text(appState.translate('return_to_dashboard')),
               ),
             ],
           ),
@@ -49,7 +49,7 @@ class AiTriagePage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('AI Triage & Reasoning', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
+        title: Text(appState.translate('ai_triage_title'), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 18)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -117,9 +117,9 @@ class AiTriagePage extends StatelessWidget {
                         children: [
                           Icon(Icons.auto_awesome_rounded, color: urgencyColor, size: 22),
                           const SizedBox(width: 8),
-                          const Text(
-                            'AI Triage Assessment',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                          Text(
+                            appState.translate('ai_triage_card_header'),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
                           ),
                         ],
                       ),
@@ -130,7 +130,7 @@ class AiTriagePage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          triage.urgencyLevel,
+                          appState.translate('urgency_${triage.urgencyLevel.toLowerCase()}'),
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                       ),
@@ -152,7 +152,7 @@ class AiTriagePage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const Text('Clinical Urgency Index', style: TextStyle(fontSize: 12, color: AppColors.textMedium, fontWeight: FontWeight.w600)),
+                  Text(appState.translate('clinical_urgency_index'), style: const TextStyle(fontSize: 12, color: AppColors.textMedium, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
@@ -160,9 +160,9 @@ class AiTriagePage extends StatelessWidget {
             const SizedBox(height: 18),
 
             // Contributing Risk Factors (XAI)
-            const Text(
-              'Contributing Risk Factors (Explainable AI)',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.forest),
+            Text(
+              appState.translate('contributing_factors_title'),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.forest),
             ),
             const SizedBox(height: 8),
             Container(
@@ -194,9 +194,9 @@ class AiTriagePage extends StatelessWidget {
             const SizedBox(height: 18),
 
             // Recommended Action & Reasoning
-            const Text(
-              'Recommended Protocol & Action',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.forest),
+            Text(
+              appState.translate('rec_action_title'),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.forest),
             ),
             const SizedBox(height: 8),
             Container(
@@ -245,15 +245,18 @@ class AiTriagePage extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   elevation: 2,
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Review & Confirm Referral',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    Flexible(
+                      child: Text(
+                        appState.translate('review_confirm_referral'),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    SizedBox(width: 8),
-                    Icon(Icons.arrow_forward_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_rounded, size: 18),
                   ],
                 ),
               ),
@@ -267,7 +270,7 @@ class AiTriagePage extends StatelessWidget {
               ),
               onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
               icon: const Icon(Icons.home_outlined, size: 18, color: Color(0xFF4B5563)),
-              label: const Text('Back to Home Dashboard', style: TextStyle(color: Color(0xFF4B5563), fontWeight: FontWeight.w600)),
+              label: Text(appState.translate('return_to_dashboard'), style: const TextStyle(color: Color(0xFF4B5563), fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
             ),
             const SizedBox(height: 16),
           ],
