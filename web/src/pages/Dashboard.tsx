@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../lib/api';
+import { io } from 'socket.io-client';
+import api, { getBaseServerUrl } from '../lib/api';
 import PageShell from '../components/ui/PageShell';
 import StatusBadge from '../components/ui/StatusBadge';
 import { SkeletonList } from '../components/ui/SkeletonLoader';
@@ -47,14 +48,39 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
+
+    // Subscribe to real-time referral events so doctor dashboard receives live submissions
+    const serverUrl = getBaseServerUrl();
+    const socket = io(serverUrl, {
+      transports: ['websocket', 'polling'],
+      auth: { token: localStorage.getItem('ayusync_token') }
+    });
+
+    socket.on('referral:created', (newRef: any) => {
+      setReferrals(prev => {
+        if (prev.some(r => r.id === newRef.id)) return prev;
+        return [newRef, ...prev];
+      });
+    });
+
+    socket.on('referral:updated', (updatedRef: any) => {
+      setReferrals(prev => {
+        if (['ACCEPTED', 'SCHEDULED', 'COUNTER_REFERRED', 'COMPLETED', 'REJECTED'].includes(updatedRef.status)) {
+          return prev.filter(r => r.id !== updatedRef.id);
+        }
+        return prev.map(r => r.id === updatedRef.id ? { ...r, ...updatedRef } : r);
+      });
+    });
+
+    return () => { socket.disconnect(); };
   }, []);
 
   // Dynamically calculate waiting patients (WAITING or PRIORITY)
   const waitingPatients = queue.filter(q => q.status === 'WAITING' || q.status === 'PRIORITY');
   const waitingCount = waitingPatients.length;
 
-  // Active incoming referrals (CREATED, SUBMITTED, ACCEPTED)
-  const pendingReferrals = referrals.filter(r => ['CREATED', 'SUBMITTED', 'ACCEPTED'].includes(r.status));
+  // Active incoming referrals waiting for doctor triage/acceptance (CREATED or SUBMITTED)
+  const pendingReferrals = referrals.filter(r => ['CREATED', 'SUBMITTED'].includes(r.status));
   const referralCount = pendingReferrals.length;
 
   // Real urgent / priority patients from queue
@@ -65,6 +91,10 @@ export default function Dashboard() {
   const handleAdmitReferral = async (referral: any) => {
     try {
       setAdmittingId(referral.id);
+
+      // Optimistically remove from incoming referrals list immediately
+      setReferrals(prev => prev.filter(r => r.id !== referral.id));
+
       // Admit directly into queue
       const facilityId = referral.destinationId || referral.originId;
       await api.post('/queue', {
@@ -72,12 +102,15 @@ export default function Dashboard() {
         facilityId: facilityId,
         priority: referral.urgency === 'URGENT' ? 2 : referral.urgency === 'PRIORITY' ? 1 : 0
       });
-      // Update referral status to ACCEPTED / SCHEDULED
+
+      // Update referral status to ACCEPTED
       await api.put(`/referrals/${referral.id}/status`, { newStatus: 'ACCEPTED' }).catch(() => {});
-      await loadData();
+
       setShowReferralsModal(false);
       navigate('/queue');
     } catch (err: any) {
+      // Revert optimistic removal on error
+      await loadData();
       alert(err.response?.data?.error || err.response?.data?.message || 'Could not admit patient to queue.');
     } finally {
       setAdmittingId(null);

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../index';
+import { getIO } from '../../events/socket';
 
 /**
  * OFFLINE SYNC MUTATION BATCH (PUSH)
@@ -34,63 +35,124 @@ export const processSyncBatch = async (req: Request, res: Response) => {
         continue;
       }
 
+      const normEntity = String(entity || '').toUpperCase().trim();
+      const normAction = String(action || 'CREATE').toUpperCase().trim();
+
       try {
-        await prisma.$transaction(async (tx) => {
-          if (entity === 'PATIENT') {
-            if (action === 'CREATE' || action === 'UPDATE') {
-              await tx.patient.upsert({
-                where: { id: payload.id },
-                update: payload,
-                create: payload
-              });
-            }
-          } else if (entity === 'ASSESSMENT') {
-            if (action === 'CREATE') {
-              await tx.assessment.create({ data: payload });
-            }
-          } else if (entity === 'REFERRAL') {
-            if (action === 'CREATE') {
-              await tx.referral.create({ data: payload });
-            } else if (action === 'UPDATE') {
-              await tx.referral.update({
-                where: { id: payload.id },
-                data: payload
-              });
-            }
-          } else if (entity === 'FOLLOWUP') {
-            if (action === 'UPDATE') {
-              await tx.followUp.update({
-                where: { id: payload.id },
-                data: payload
-              });
-            }
-          } else if (entity === 'TASK') {
-            if (action === 'UPDATE') {
-              await tx.task.update({
-                where: { id: payload.id },
-                data: payload
-              });
+        if (normEntity === 'PATIENT') {
+          if (normAction === 'CREATE' || normAction === 'UPDATE') {
+            const patientData: any = {
+              name: String(payload.name || 'Community Patient').trim(),
+              age: typeof payload.age === 'number' ? payload.age : (parseInt(payload.age, 10) || null),
+              gender: String(payload.gender || 'FEMALE').toUpperCase(),
+              village: payload.village || payload.address || null,
+              phone: payload.phone ? String(payload.phone).trim() : null
+            };
+
+            const cleanId = payload.id || undefined;
+            const patient = cleanId
+              ? await prisma.patient.upsert({
+                  where: { id: cleanId },
+                  update: patientData,
+                  create: { id: cleanId, ...patientData }
+                })
+              : await prisma.patient.create({ data: patientData });
+
+            // If ABHA ID provided in payload
+            if (payload.abhaId) {
+              const cleanAbha = String(payload.abhaId).replace(/[^a-zA-Z0-9-]/g, '').trim();
+              if (cleanAbha) {
+                await prisma.patientIdentifier.upsert({
+                  where: { value: cleanAbha },
+                  update: { patientId: patient.id },
+                  create: { type: 'ABHA', value: cleanAbha, patientId: patient.id }
+                }).catch(() => {});
+              }
             }
           }
-
-          // Record sync audit record
-          await tx.syncOperation.create({
-            data: {
-              id: operationId,
-              userId: workerId || 'unknown-worker',
-              deviceId: mutation.deviceId || 'unknown',
-              entity,
-              entityId: payload.id || 'unknown',
-              operation: action,
-              payload,
-              clientTimestamp: mutation.timestamp ? new Date(mutation.timestamp) : new Date(),
-              status: 'SUCCESS'
+        } else if (normEntity === 'REFERRAL') {
+          if (normAction === 'CREATE') {
+            // Validate origin and destination facilities
+            let originId = payload.originId;
+            if (originId) {
+              const origExists = await prisma.facility.findUnique({ where: { id: originId } });
+              if (!origExists) originId = undefined;
             }
-          });
+            if (!originId) {
+              const firstFac = await prisma.facility.findFirst();
+              originId = firstFac?.id || payload.destinationId;
+            }
+
+            const ref = await prisma.referral.create({
+              data: {
+                id: payload.id || undefined,
+                patientId: payload.patientId,
+                originId,
+                destinationId: payload.destinationId,
+                urgency: payload.urgency || 'ROUTINE',
+                reason: payload.reason || 'Clinical referral from field worker',
+                status: 'SUBMITTED'
+              },
+              include: { patient: true, origin: true, destination: true }
+            });
+
+            await prisma.referralEvent.create({
+              data: {
+                referralId: ref.id,
+                statusFrom: 'CREATED',
+                statusTo: 'SUBMITTED',
+                notes: 'Offline referral synced from frontline health worker'
+              }
+            }).catch(() => {});
+
+            // Broadcast real-time referral arrival to doctors
+            try {
+              const io = getIO();
+              io.emit('referral:created', ref);
+              io.to(`facility_${payload.destinationId}`).emit('referral:created', ref);
+            } catch {}
+          } else if (normAction === 'UPDATE' && payload.id) {
+            await prisma.referral.update({
+              where: { id: payload.id },
+              data: payload
+            });
+          }
+        } else if (normEntity === 'FOLLOWUP') {
+          if (normAction === 'UPDATE' && payload.id) {
+            await prisma.followUp.update({
+              where: { id: payload.id },
+              data: payload
+            });
+          }
+        } else if (normEntity === 'TASK') {
+          if (normAction === 'UPDATE' && payload.id) {
+            await prisma.task.update({
+              where: { id: payload.id },
+              data: payload
+            });
+          }
+        }
+
+        // Record sync audit record
+        await prisma.syncOperation.create({
+          data: {
+            id: operationId,
+            userId: workerId || 'unknown-worker',
+            deviceId: mutation.deviceId || 'unknown',
+            entity: normEntity,
+            entityId: payload.id || 'unknown',
+            operation: normAction,
+            payload,
+            clientTimestamp: mutation.timestamp ? new Date(mutation.timestamp) : new Date(),
+            status: 'SUCCESS'
+          }
+        }).catch((auditErr) => {
+          console.warn('[Sync] Audit record warning:', auditErr);
         });
 
         results.push({ operationId, status: 'SUCCESS' });
       } catch (err: any) {
+        console.warn(`[Sync] Mutation ${operationId} conflict or error:`, err.message);
         results.push({ operationId, status: 'CONFLICT', error: err.message });
       }
     }

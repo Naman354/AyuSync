@@ -11,17 +11,8 @@ import {
   Wifi, WifiOff, RefreshCw, Users, Clock,
   ClipboardList, CheckCircle2, Pill,
 } from 'lucide-react';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const MUTATION_QUEUE_KEY = 'ayusync_mutation_queue';
-
-function getOfflineQueue(): any[] {
-  try { return JSON.parse(localStorage.getItem(MUTATION_QUEUE_KEY) || '[]'); }
-  catch { return []; }
-}
-function saveOfflineQueue(q: any[]) {
-  localStorage.setItem(MUTATION_QUEUE_KEY, JSON.stringify(q));
-}
+import { useNetworkStatus } from '../lib/network';
+import { getOfflineQueue, getLocalPatients, flushOfflineSync } from '../lib/offlineSync';
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
 function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: string) => void; isNew?: boolean }) {
@@ -114,18 +105,14 @@ const DEMO_WORKER_PATIENTS = [
 export default function WorkerDashboard() {
   const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
 
+  const { isOnline, isOffline }       = useNetworkStatus();
   const [patients, setPatients]       = useState<any[]>(DEMO_WORKER_PATIENTS);
   const [followUps, setFollowUps]     = useState<any[]>(DEMO_WORKER_TASKS);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
   const [syncing, setSyncing]         = useState(false);
   const [newTaskIds, setNewTaskIds]   = useState<Set<string>>(new Set());
-
-  // ── Offline simulation state ──
-  const [simulateOffline, setSimulateOffline] = useState(
-    () => localStorage.getItem('ayusync_simulate_offline') === 'true'
-  );
-  const [offlineQueue, setOfflineQueue]       = useState<any[]>(getOfflineQueue());
+  const [offlineQueue, setOfflineQueue] = useState<any[]>(getOfflineQueue());
 
   const socketRef = useRef<any>(null);
 
@@ -133,40 +120,78 @@ export default function WorkerDashboard() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const name = user.name || 'Sunita Patil';
 
-  // ── Fetch real data with resilient fallback ──
-  useEffect(() => {
-    let isMounted = true;
-    const fetchData = async () => {
-      let patientList = DEMO_WORKER_PATIENTS;
-      let taskList = DEMO_WORKER_TASKS;
+  // ── Fetch real data with local caching & resilient fallback ──
+  const refreshData = async () => {
+    let serverPatients: any[] = [];
+    let taskList = DEMO_WORKER_TASKS;
+    const local = getLocalPatients();
 
-      try {
-        const pRes = await api.get('/patients/search?q=').catch(() => null);
-        if (pRes?.data) {
-          const list = Array.isArray(pRes.data) ? pRes.data : (pRes.data?.data || []);
-          if (list.length > 0) patientList = list.slice(0, 5);
-        }
-      } catch {}
-
-      try {
-        const fRes = await api.get('/followups?status=PENDING').catch(() => null);
-        if (fRes?.data) {
-          const list = Array.isArray(fRes.data) ? fRes.data : [];
-          if (list.length > 0) taskList = list;
-        }
-      } catch {}
-
-      if (isMounted) {
-        setPatients(patientList);
-        setFollowUps(taskList);
-        setLoading(false);
+    try {
+      const pRes = await api.get('/patients/search?q=').catch(() => null);
+      if (pRes?.data) {
+        const list = Array.isArray(pRes.data) ? pRes.data : (pRes.data?.data || []);
+        if (list.length > 0) serverPatients = list;
       }
-    };
+    } catch {}
 
-    fetchData();
-    return () => { isMounted = false; };
+    // Merge: local patients (freshly added/offline) first, then server, then demo
+    const seen = new Set<string>();
+    const mergedPatients: any[] = [];
+    for (const p of [...local, ...serverPatients, ...DEMO_WORKER_PATIENTS]) {
+      const key = p.id || `${p.name}-${p.phone || ''}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        mergedPatients.push(p);
+      }
+    }
+
+    try {
+      const fRes = await api.get('/followups?status=PENDING').catch(() => null);
+      if (fRes?.data) {
+        const list = Array.isArray(fRes.data) ? fRes.data : [];
+        if (list.length > 0) taskList = list;
+      }
+    } catch {}
+
+    setPatients(mergedPatients.slice(0, 6));
+    setFollowUps(taskList);
+    setOfflineQueue(getOfflineQueue());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refreshData();
   }, []);
 
+  // ── Listen for local patient intakes & offline queue updates in real-time ──
+  useEffect(() => {
+    const handlePatientsUpdate = (e: any) => {
+      const newP = e.detail?.patient;
+      if (newP) {
+        setPatients(prev => {
+          const filtered = prev.filter(p => p.id !== newP.id && (!p.phone || p.phone !== newP.phone));
+          return [newP, ...filtered].slice(0, 6);
+        });
+      }
+    };
+    const handleQueueUpdate = () => {
+      setOfflineQueue(getOfflineQueue());
+    };
+    const handleSynced = () => {
+      setOfflineQueue(getOfflineQueue());
+      refreshData();
+    };
+
+    window.addEventListener('ayusync:patients_updated', handlePatientsUpdate);
+    window.addEventListener('ayusync:queue_updated', handleQueueUpdate);
+    window.addEventListener('ayusync:synced', handleSynced);
+
+    return () => {
+      window.removeEventListener('ayusync:patients_updated', handlePatientsUpdate);
+      window.removeEventListener('ayusync:queue_updated', handleQueueUpdate);
+      window.removeEventListener('ayusync:synced', handleSynced);
+    };
+  }, []);
 
   // ── Socket subscription for real-time task delivery ──
   useEffect(() => {
@@ -200,32 +225,20 @@ export default function WorkerDashboard() {
     return () => { socket.disconnect(); };
   }, [user.id]);
 
-  // ── Offline simulation queue flush ──
-  const flushOfflineQueue = async () => {
-    const q = getOfflineQueue();
-    if (q.length === 0) return;
+  // ── Offline sync queue flush ──
+  const handleFlushOfflineQueue = async () => {
+    if (offlineQueue.length === 0 || syncing) return;
     setSyncing(true);
     try {
-      await api.post('/sync', {
-        workerId: user.id || 'demo-worker',
-        mutations: q,
-      });
-      saveOfflineQueue([]);
-      setOfflineQueue([]);
-    } catch { /* leave queue intact if server not reachable */ } finally { setSyncing(false); }
-  };
-
-  const toggleOfflineMode = () => {
-    if (simulateOffline) {
-      // Going back online — flush queued mutations
-      setSimulateOffline(false);
-      flushOfflineQueue();
-    } else {
-      setSimulateOffline(true);
+      await flushOfflineSync();
+      setOfflineQueue(getOfflineQueue());
+      await refreshData();
+    } catch {
+      /* leave queue intact if server not reachable */
+    } finally {
+      setSyncing(false);
     }
   };
-
-
 
   const completeTask = (id: string) => {
     setFollowUps(prev => prev.map(f => f.id === id ? { ...f, status: 'COMPLETED' } : f));
@@ -246,29 +259,29 @@ export default function WorkerDashboard() {
       subtitle="Khandala Sub-Center, Pune District · Here's what needs your attention today."
       action={
         <div className="flex items-center gap-2">
-          {/* Offline simulation pill */}
-          <button
-            onClick={toggleOfflineMode}
-            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-all ${
-              simulateOffline
-                ? 'border-amber-300 bg-amber-50 text-amber-700'
-                : 'border-gray-200 bg-white text-gray-600'
-            }`}
-          >
-            {simulateOffline
-              ? <><WifiOff size={12} className="text-amber-500" />{offlineQueue.length > 0 ? `${offlineQueue.length} queued` : 'Offline Mode'}</>
-              : <><Wifi size={12} className="text-[#1e6641]" /><span className="text-[#1e6641]">Online</span></>
-            }
-          </button>
-          {/* Sync trigger */}
+          {/* Automatic Network Status Indicator */}
+          {isOnline ? (
+            <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-green-200 bg-green-50 text-[#1e6641] shadow-xs">
+              <Wifi size={12} className="text-[#1e6641]" />
+              <span>Online (Auto-Sync)</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700 shadow-xs animate-pulse">
+              <WifiOff size={12} className="text-amber-500" />
+              <span>Offline ({offlineQueue.length} queued)</span>
+            </span>
+          )}
+
+          {/* Sync Trigger button if mutations queued */}
           {(offlineQueue.length > 0 || syncing) && (
             <button
-              onClick={flushOfflineQueue}
-              disabled={syncing}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#1e6641] hover:bg-[#165032] text-white transition-colors disabled:opacity-60"
+              onClick={handleFlushOfflineQueue}
+              disabled={syncing || isOffline}
+              title={isOffline ? "Cannot sync while offline" : "Upload queued mutations to server"}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-[#1e6641] hover:bg-[#165032] text-white transition-colors shadow-xs disabled:opacity-50"
             >
               <RefreshCw size={12} className={syncing ? 'animate-spin' : ''} />
-              {syncing ? 'Syncing…' : 'Sync now'}
+              {syncing ? 'Syncing…' : `Sync Queue (${offlineQueue.length})`}
             </button>
           )}
         </div>
@@ -276,11 +289,17 @@ export default function WorkerDashboard() {
     >
       <InlineError message={error} onDismiss={() => setError('')} />
 
-      {simulateOffline && (
-        <div className="mb-4 flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium">
-          <WifiOff size={13} />
-          Offline Mode active — new patient registrations will be stored locally and synced when you reconnect.
-          {offlineQueue.length > 0 && <span className="ml-auto font-bold">{offlineQueue.length} mutation(s) queued</span>}
+      {isOffline && (
+        <div className="mb-4 flex items-center gap-2.5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 font-medium shadow-xs">
+          <WifiOff size={16} className="text-amber-600 shrink-0" />
+          <div className="flex-1">
+            <strong className="font-semibold text-amber-900">Offline Mode Active</strong> — No internet detected. New patient intakes & referrals are saved locally and will automatically synchronize when connectivity returns.
+          </div>
+          {offlineQueue.length > 0 && (
+            <span className="shrink-0 font-bold bg-amber-200/80 px-2.5 py-0.5 rounded-full text-amber-900">
+              {offlineQueue.length} pending
+            </span>
+          )}
         </div>
       )}
 

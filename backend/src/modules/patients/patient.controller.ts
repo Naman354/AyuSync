@@ -9,14 +9,15 @@ export const createPatient = async (req: Request, res: Response) => {
   try {
     const { name, dob, age, gender, village, phone, abhaId } = req.body;
     
-    // Validate Patient Name
-    const nameCheck = sanitizeString(name, 2, 100);
+    // Validate & Sanitize Patient Name (strip tags, require 2-100 characters)
+    const rawName = String(name || '').replace(/<[^>]*>?/gm, '').trim();
+    const nameCheck = sanitizeString(rawName, 2, 100);
     if (!nameCheck.valid) {
       return res.status(400).json({ error: 'Bad Request', message: `Patient name: ${nameCheck.error}` });
     }
 
     // Validate Gender
-    const genderCheck = validateEnum(gender ? String(gender).toUpperCase() : '', ['MALE', 'FEMALE', 'OTHER'] as const, 'Gender');
+    const genderCheck = validateEnum(gender ? String(gender).toUpperCase().trim() : '', ['MALE', 'FEMALE', 'OTHER'] as const, 'Gender');
     if (!genderCheck.valid) {
       return res.status(400).json({ error: 'Bad Request', message: genderCheck.error });
     }
@@ -29,7 +30,7 @@ export const createPatient = async (req: Request, res: Response) => {
 
     // Validate Phone (optional)
     let validatedPhone: string | undefined = undefined;
-    if (phone) {
+    if (phone && String(phone).trim()) {
       const phoneCheck = validatePhone(phone);
       if (!phoneCheck.valid) {
         return res.status(400).json({ error: 'Bad Request', message: phoneCheck.error });
@@ -37,10 +38,15 @@ export const createPatient = async (req: Request, res: Response) => {
       validatedPhone = phoneCheck.normalized;
     }
 
+    // Map village or address
+    const rawVillage = String(village || req.body.address || '').replace(/<[^>]*>?/gm, '').trim();
+    const cleanVillage = rawVillage ? rawVillage.slice(0, 150) : null;
+
     // Validate ABHA ID format & duplicates (optional)
     let cleanAbha: string | undefined = undefined;
-    if (abhaId) {
-      const abhaCheck = sanitizeString(abhaId, 3, 30);
+    if (abhaId && String(abhaId).trim()) {
+      const sanitizedAbha = String(abhaId).replace(/[^a-zA-Z0-9-]/g, '').trim();
+      const abhaCheck = sanitizeString(sanitizedAbha, 3, 30);
       if (!abhaCheck.valid) {
         return res.status(400).json({ error: 'Bad Request', message: `ABHA ID: ${abhaCheck.error}` });
       }
@@ -61,7 +67,7 @@ export const createPatient = async (req: Request, res: Response) => {
         dob: dob ? new Date(dob) : null,
         age: ageCheck.age,
         gender: genderCheck.value!,
-        village: village ? String(village).trim() : null,
+        village: cleanVillage,
         phone: validatedPhone,
         identifiers: cleanAbha ? {
           create: {

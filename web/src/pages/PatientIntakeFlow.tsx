@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
+import { useNetworkStatus } from '../lib/network';
+import { saveLocalPatient, enqueueOfflineMutation } from '../lib/offlineSync';
 import { Button } from '../components/ui/Button';
 import StatusBadge from '../components/ui/StatusBadge';
 import {
@@ -28,9 +30,10 @@ const LABEL = 'block text-xs font-semibold text-gray-700 mb-1.5';
 export default function PatientIntakeFlow() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isOffline } = useNetworkStatus();
   const [step, setStep] = useState(parseInt(searchParams.get('step') || '1', 10));
 
-  const [patient, setPatient] = useState({ name: '', age: '', gender: 'FEMALE', phone: '', address: 'Mokama Ward 4', abhaId: '' });
+  const [patient, setPatient] = useState({ name: '', age: '', gender: 'FEMALE', phone: '', address: 'Khandala Ward 4', abhaId: '' });
   const [vitals,  setVitals]  = useState({ bpSystolic: '120', bpDiastolic: '80', heartRate: '78', spO2: '98', temperature: '98.6' });
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [facilities, setFacilities] = useState<any[]>([]);
@@ -38,6 +41,7 @@ export default function PatientIntakeFlow() {
   const [referralNotes, setReferralNotes] = useState('');
   const [needsAmbulance, setNeedsAmbulance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [assessment, setAssessment] = useState<{ urgency: string; score: number; tier: string; reasons: string[] } | null>(null);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
 
@@ -56,27 +60,44 @@ export default function PatientIntakeFlow() {
 
   const validateStep1 = () => {
     const errs: Record<string, string> = {};
-    const cleanName = (patient.name || '').trim();
+    const cleanName = (patient.name || '').replace(/<[^>]*>?/gm, '').trim();
     if (!cleanName) {
       errs.name = 'Patient full name is required';
     } else if (cleanName.length < 2) {
       errs.name = 'Name must be at least 2 characters long';
+    } else if (/[0-9]/.test(cleanName)) {
+      errs.name = 'Name should only contain alphabetic characters and spaces';
     }
 
-    if (!patient.age) {
+    if (!patient.age || String(patient.age).trim() === '') {
       errs.age = 'Age is required';
     } else {
-      const ageNum = parseInt(patient.age, 10);
-      if (isNaN(ageNum) || ageNum < 0 || ageNum > 125) {
-        errs.age = 'Enter a valid age between 0 and 125';
+      const ageNum = Number(patient.age);
+      if (!Number.isInteger(ageNum) || ageNum < 0 || ageNum > 125) {
+        errs.age = 'Enter a valid whole number age between 0 and 125';
       }
     }
 
-    if (patient.phone) {
-      const digits = patient.phone.replace(/\D/g, '');
-      if (digits.length < 10) {
-        errs.phone = 'Phone number must be at least 10 digits';
+    const rawPhone = (patient.phone || '').trim();
+    if (rawPhone) {
+      const digits = rawPhone.replace(/\D/g, '');
+      if (digits.length !== 10) {
+        errs.phone = 'Please enter a valid 10-digit mobile number';
+      } else if (!/^[6-9]\d{9}$/.test(digits)) {
+        errs.phone = 'Mobile number must start with 6, 7, 8, or 9';
       }
+    }
+
+    const cleanVillage = (patient.address || '').replace(/<[^>]*>?/gm, '').trim();
+    if (!cleanVillage) {
+      errs.address = 'Village / Ward is required';
+    } else if (cleanVillage.length < 2) {
+      errs.address = 'Village must be at least 2 characters long';
+    }
+
+    const cleanAbha = (patient.abhaId || '').replace(/[^a-zA-Z0-9-]/g, '').trim();
+    if (cleanAbha && cleanAbha.replace(/-/g, '').length !== 14) {
+      errs.abhaId = 'ABHA ID must be a 14-digit number (e.g. 14 digits or XX-XXXX-XXXX-XXXX)';
     }
 
     setStepErrors(errs);
@@ -155,35 +176,60 @@ export default function PatientIntakeFlow() {
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    const isOfflineSim = localStorage.getItem('ayusync_simulate_offline') === 'true';
+    setSubmitError('');
+
     const token = `REF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    if (isOfflineSim) {
-      // Offline mode active: queue mutation directly in localStorage
-      const q = JSON.parse(localStorage.getItem('ayusync_mutation_queue') || '[]');
-      const offlineId = `offline-pat-${Date.now()}`;
-      q.push({
-        operationId: offlineId,
-        entity: 'patient',
+    const cleanName = (patient.name || '').replace(/<[^>]*>?/gm, '').trim();
+    const cleanAge = parseInt(patient.age || '30', 10);
+    const cleanVillage = (patient.address || 'Khandala Ward 4').replace(/<[^>]*>?/gm, '').trim();
+    const digitsPhone = (patient.phone || '').replace(/\D/g, '');
+    const cleanPhone = digitsPhone ? (digitsPhone.startsWith('91') && digitsPhone.length === 12 ? `+${digitsPhone}` : `+91${digitsPhone.slice(-10)}`) : undefined;
+    const cleanAbha = (patient.abhaId || '').replace(/[^a-zA-Z0-9-]/g, '').trim() || undefined;
+    const cleanReason = referralNotes || symptoms.join(', ') || 'Routine evaluation';
+
+    // If device is offline (detected automatically), save locally and enqueue for auto-sync
+    if (isOffline) {
+      const offlinePatientId = `offline-pat-${Date.now()}`;
+      const offlinePatientRecord = {
+        id: offlinePatientId,
+        name: cleanName || 'Community Patient',
+        age: cleanAge,
+        gender: patient.gender,
+        village: cleanVillage,
+        phone: cleanPhone,
+        abhaId: cleanAbha,
+        createdAt: new Date().toISOString()
+      };
+
+      // Save locally so patient immediately appears in Recent Patients on ASHA dashboard
+      saveLocalPatient(offlinePatientRecord);
+
+      // Enqueue mutations for backend sync
+      enqueueOfflineMutation({
+        entity: 'PATIENT',
         action: 'CREATE',
-        payload: {
-          name: patient.name || 'Community Patient',
-          age: parseInt(patient.age || '30', 10),
-          gender: patient.gender,
-          village: patient.address,
-          phone: patient.phone || `+91${Math.floor(1e9 + Math.random() * 9e9)}`,
-          vitals,
-          symptoms,
-          facilityId: selectedFacility,
-          urgency: assessment?.urgency || 'ROUTINE',
-        }
+        payload: offlinePatientRecord
       });
-      localStorage.setItem('ayusync_mutation_queue', JSON.stringify(q));
+
+      if (selectedFacility) {
+        enqueueOfflineMutation({
+          entity: 'REFERRAL',
+          action: 'CREATE',
+          payload: {
+            id: `offline-ref-${Date.now()}`,
+            patientId: offlinePatientId,
+            destinationId: selectedFacility,
+            urgency: assessment?.urgency || 'ROUTINE',
+            reason: cleanReason
+          }
+        });
+      }
 
       navigate('/referral-success', {
         state: {
           token,
-          patientName: patient.name || 'Community Patient',
+          patientName: cleanName || 'Community Patient',
           urgency: assessment?.urgency || 'ROUTINE',
           facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
           symptoms,
@@ -195,40 +241,76 @@ export default function PatientIntakeFlow() {
       return;
     }
 
+    // Online submission flow
     try {
-      let patientId = '';
+      let createdPatient: any = null;
       try {
-        const r = await api.post('/patients', {
-          name: patient.name || 'Community Patient',
-          age: parseInt(patient.age || '30', 10),
+        const pRes = await api.post('/patients', {
+          name: cleanName,
+          age: cleanAge,
           gender: patient.gender,
-          phone: patient.phone || `+91${Math.floor(1e9 + Math.random() * 9e9)}`,
-          address: patient.address,
-          abhaId: patient.abhaId || `ABHA-${Math.floor(1e5 + Math.random() * 9e5)}`,
+          village: cleanVillage,
+          phone: cleanPhone,
+          abhaId: cleanAbha
         });
-        patientId = r.data?.id || r.data?.data?.id;
-      } catch { patientId = 'demo-' + Date.now(); }
-
-      try {
-        if (selectedFacility && patientId) {
-          await api.post('/referrals', {
-            patientId, originId: 'fac-khandala-phc', destinationId: selectedFacility,
-            urgency: assessment?.urgency || 'ROUTINE',
-            reason: referralNotes || symptoms.join(', ') || 'Routine evaluation',
+        createdPatient = pRes.data;
+      } catch (pErr: any) {
+        // If network dropped mid-request, gracefully fallback to offline queue
+        if (pErr.code === 'ERR_NETWORK' || !navigator.onLine) {
+          const offlinePatId = `offline-pat-${Date.now()}`;
+          const offlinePat = { id: offlinePatId, name: cleanName, age: cleanAge, gender: patient.gender, village: cleanVillage, phone: cleanPhone };
+          saveLocalPatient(offlinePat);
+          enqueueOfflineMutation({ entity: 'PATIENT', action: 'CREATE', payload: offlinePat });
+          if (selectedFacility) {
+            enqueueOfflineMutation({
+              entity: 'REFERRAL',
+              action: 'CREATE',
+              payload: { patientId: offlinePatId, destinationId: selectedFacility, urgency: assessment?.urgency || 'ROUTINE', reason: cleanReason }
+            });
+          }
+          navigate('/referral-success', {
+            state: { token, patientName: cleanName, urgency: assessment?.urgency || 'ROUTINE', facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC', symptoms, needsAmbulance, isOffline: true }
           });
+          return;
         }
-      } catch {}
+        throw pErr;
+      }
+
+      // Save to local cache so patient immediately shows up on ASHA worker's Recent Patients
+      if (createdPatient) {
+        saveLocalPatient(createdPatient);
+      }
+
+      // Create Referral with valid origin facility
+      if (selectedFacility && createdPatient?.id) {
+        const originFacilityId = facilities[0]?.id || selectedFacility;
+        await api.post('/referrals', {
+          patientId: createdPatient.id,
+          originId: originFacilityId,
+          destinationId: selectedFacility,
+          urgency: assessment?.urgency || 'ROUTINE',
+          reason: cleanReason
+        });
+      }
 
       navigate('/referral-success', {
         state: {
-          token, patientName: patient.name || 'Community Patient',
+          token,
+          patientName: cleanName,
           urgency: assessment?.urgency || 'ROUTINE',
           facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
-          symptoms, needsAmbulance,
+          symptoms,
+          needsAmbulance,
           isOffline: false,
         }
       });
-    } catch (e) { console.error(e); } finally { setSubmitting(false); }
+    } catch (e: any) {
+      console.error('[PatientIntakeFlow] Submission error:', e);
+      const errMsg = e.response?.data?.message || e.response?.data?.error || 'Could not register patient or submit referral. Please check details and try again.';
+      setSubmitError(errMsg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
 
@@ -236,6 +318,12 @@ export default function PatientIntakeFlow() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 pb-16 animate-page-in">
+      {submitError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-semibold text-red-800 flex items-center justify-between shadow-xs">
+          <span>{submitError}</span>
+          <button onClick={() => setSubmitError('')} className="text-red-600 hover:text-red-800 font-bold ml-3">✕</button>
+        </div>
+      )}
       {/* Step indicator */}
       <div className="bg-white rounded-2xl border border-gray-100 px-5 py-4">
         <div className="flex items-center justify-between mb-3">
