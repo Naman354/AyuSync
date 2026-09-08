@@ -13,7 +13,7 @@ class CaseSubmittedPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Referral Sent'),
+        title: const Text('15 Case Submitted'),
         backgroundColor: const Color(0xFF16A34A), // Success green
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
@@ -39,13 +39,13 @@ class CaseSubmittedPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Referral Sent Successfully!',
+                'Referral Case Dispatched!',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               Text(
-                'Referral has been sent to ${referral?.facility.name ?? "Receiving Facility"} and is now visible to the doctor on duty.',
+                'Case has been transmitted to ${referral?.facility.name ?? "Receiving Facility"} and placed on Doctor Live Queue.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14, color: Colors.grey.shade700, height: 1.4),
               ),
@@ -61,7 +61,7 @@ class CaseSubmittedPage extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    const Text('Referral ID', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    const Text('Official Referral Tracking ID', style: TextStyle(color: Colors.grey, fontSize: 12)),
                     const SizedBox(height: 4),
                     Text(
                       referral?.referralId ?? 'REF-889412',
@@ -101,7 +101,7 @@ class CaseSubmittedPage extends StatelessWidget {
                 },
                 icon: const Icon(Icons.receipt_long),
                 label: const Text(
-                  'View Referral Status & Timeline',
+                  'View 19 Case Status / Confirmation',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),

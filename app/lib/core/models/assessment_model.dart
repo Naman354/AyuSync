@@ -115,8 +115,6 @@ class Assessment {
   final String severity; // LOW, MODERATE, CRITICAL / SEVERE
   final int durationDays;
   final Vitals vitals;
-  final String? primaryHealthConcern;
-  final String? relevantObservations;
   final String? clinicalNotes;
   final DateTime timestamp;
   final bool isSynced;
@@ -129,8 +127,6 @@ class Assessment {
     required this.severity,
     required this.durationDays,
     required this.vitals,
-    this.primaryHealthConcern,
-    this.relevantObservations,
     this.clinicalNotes,
     DateTime? timestamp,
     this.isSynced = true,
@@ -145,8 +141,6 @@ class Assessment {
       'severity': severity,
       'durationDays': durationDays,
       'vitals': vitals.toMap(),
-      'primaryHealthConcern': primaryHealthConcern ?? '',
-      'relevantObservations': relevantObservations ?? '',
       'clinicalNotes': clinicalNotes ?? '',
       'timestamp': timestamp.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
@@ -197,8 +191,6 @@ class Assessment {
       severity: sev,
       durationDays: duration,
       vitals: v,
-      primaryHealthConcern: map['primaryHealthConcern']?.toString(),
-      relevantObservations: map['relevantObservations']?.toString(),
       clinicalNotes: map['clinicalNotes']?.toString(),
       timestamp: map['createdAt'] != null
           ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()

@@ -87,7 +87,7 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
             child: Row(
               children: [
                 Text(
-                  '${results.length} Patients Saved on Device',
+                  '${results.length} Patients in Local Database',
                   style: const TextStyle(fontSize: 13, color: AppColors.textMedium, fontWeight: FontWeight.w600),
                 ),
                 const Spacer(),
@@ -174,7 +174,7 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
                                       Text(
                                         assessments.isNotEmpty
                                             ? 'Last Assessed: ${assessments.first.primarySymptom}'
-                                            : 'No past visits recorded',
+                                            : 'No previous encounters recorded',
                                         style: const TextStyle(fontSize: 11, color: AppColors.forest, fontWeight: FontWeight.w600),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,

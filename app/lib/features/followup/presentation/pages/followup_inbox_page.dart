@@ -27,7 +27,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Follow-Up Tasks'),
+        title: const Text('06 Follow-up Inbox'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -37,19 +37,16 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: Colors.white,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _filterChip('ALL', 'All (${allTasks.length})'),
-                  const SizedBox(width: 8),
-                  _filterChip('PENDING', 'Pending'),
-                  const SizedBox(width: 8),
-                  _filterChip('OVERDUE', 'Overdue'),
-                  const SizedBox(width: 8),
-                  _filterChip('COMPLETED', 'Done'),
-                ],
-              ),
+            child: Row(
+              children: [
+                _filterChip('ALL', 'All (${allTasks.length})'),
+                const SizedBox(width: 8),
+                _filterChip('PENDING', 'Pending'),
+                const SizedBox(width: 8),
+                _filterChip('OVERDUE', 'Overdue'),
+                const SizedBox(width: 8),
+                _filterChip('COMPLETED', 'Done'),
+              ],
             ),
           ),
           const Divider(height: 1),
@@ -60,16 +57,12 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
               children: [
                 Icon(Icons.arrow_downward, size: 16, color: Color(0xFF2563EB)),
                 SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Doctor Instructions & Follow-up Tasks',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                Text(
+                  'Doctor Counter-Referral Assignments',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
                 ),
-                SizedBox(width: 8),
-                Text('Tap to view details', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                Spacer(),
+                Text('Tap for 17 Details', style: TextStyle(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ),
@@ -169,13 +162,9 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                                   children: [
                                     const Icon(Icons.local_hospital_outlined, size: 14, color: Colors.grey),
                                     const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        'Assigned by: ${task.doctorName} (${task.doctorFacility})',
-                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                    Text(
+                                      'Assigned by: ${task.doctorName} (${task.doctorFacility})',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                                     ),
                                   ],
                                 ),

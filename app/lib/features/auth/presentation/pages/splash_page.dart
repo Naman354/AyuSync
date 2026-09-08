@@ -18,14 +18,11 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _navigateNext() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    await Future.wait([
-      Future.delayed(const Duration(milliseconds: 1400)),
-      appState.restoreSession(),
-    ]);
+    await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
+    final appState = Provider.of<AppState>(context, listen: false);
 
-    // If worker is logged in, route to /home, else /login
+    // If worker is not already logged in, route to /login
     if (appState.isLoggedIn) {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
@@ -73,7 +70,7 @@ class _SplashPageState extends State<SplashPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Connected Rural Healthcare\nASHA & ANM Companion',
+              'Rural Health Continuum Platform\nASHA & ANM Companion',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.85),

@@ -24,14 +24,6 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<AppState>(context, listen: false).loadDashboardData();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
@@ -196,9 +188,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             child: Text(
               isOnline
                   ? (queueCount > 0
-                      ? 'Online · $queueCount items waiting to upload'
-                      : 'Online · All records up to date')
-                  : 'Offline Mode · $queueCount items saved (will sync when online)',
+                      ? 'Online · $queueCount pending offline items'
+                      : 'Online · Local database synchronized')
+                  : 'Offline Mode · $queueCount items queued in SQLite',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -253,7 +245,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             const SizedBox(width: 10),
             const Expanded(
               child: Text(
-                'Search by Patient Name, ID, or Phone',
+                'Search By Patient Name, ID Or Mobile Number',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -483,7 +475,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                             ),
                             const SizedBox(height: 4),
                             const Text(
-                              'Check on patient and submit update after 3 days.',
+                              'Submit the health update after 3 days of observation.',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -844,29 +836,16 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             const Divider(),
             Text('Assigned Center: ${appState.workerCenter}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
             const SizedBox(height: 6),
-            Text('Network State: ${appState.isOnline ? "Online" : "Offline (Saved on device)"}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
+            Text('Network State: ${appState.isOnline ? "Online" : "Offline (Local SQLite)"}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
             const SizedBox(height: 6),
             Text('Total Registered Patients: ${appState.patients.length}', style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563))),
           ],
         ),
         actions: [
-          TextButton.icon(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await appState.logout();
-              if (!context.mounted) return;
-              Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-            },
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-            label: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-            ),
-          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Close', style: TextStyle(color: AppColors.forest, fontWeight: FontWeight.bold)),
-          ),
+          )
         ],
       ),
     );

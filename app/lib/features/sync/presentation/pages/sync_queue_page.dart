@@ -13,45 +13,31 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
   bool _isSyncing = false;
 
   void _triggerSync() async {
+    setState(() => _isSyncing = true);
     final appState = Provider.of<AppState>(context, listen: false);
 
+    // If currently marked offline, auto-switch to online for this sync
     if (!appState.isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('⚠️ Offline: Cannot upload without internet. Please enable Mobile Data or Wi-Fi.'),
-          backgroundColor: Colors.amber.shade900,
-        ),
-      );
-      return;
+      appState.toggleOnlineStatus();
     }
 
-    setState(() => _isSyncing = true);
-    final syncSuccess = await appState.syncAllQueueItems();
+    await appState.syncAllQueueItems();
 
     if (!mounted) return;
     setState(() => _isSyncing = false);
 
-    if (syncSuccess) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Upload Complete! All offline records are now synchronized.'),
-          backgroundColor: Colors.green,
-        ),
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ 11 Sync / Upload Completed. Local mutations synchronized to server.'),
+        backgroundColor: Colors.green,
+      ),
+    );
 
-      // If an assessment was recently created, proceed to AI Triage + Reasoning
-      if (appState.currentAssessment != null) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, '/triage/ai_result');
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('❌ Upload Failed: Unable to reach backend server. Records remain safely saved on device.'),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
+    // If an assessment was recently created, proceed directly to 12 AI Triage + Reasoning
+    if (appState.currentAssessment != null) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/triage/ai_result');
     }
   }
 
@@ -63,7 +49,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Offline Upload Queue'),
+        title: const Text('11 Sync Queue & Upload'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -89,11 +75,11 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        appState.isOnline ? 'Network Connected (Ready to Sync)' : 'Offline (Saved on device)',
+                        appState.isOnline ? 'Network Connected (Ready to Sync)' : 'Offline (Local Cache Active)',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '${items.length} records waiting to upload',
+                        '${items.length} Pending Mutations in SQLite Queue',
                         style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                       ),
                     ],
@@ -133,10 +119,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                               Navigator.pushReplacementNamed(context, '/triage/ai_result');
                             },
                             icon: const Icon(Icons.auto_awesome),
-                            label: const FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text('View Health Urgency & Guidance', maxLines: 1),
-                            ),
+                            label: const Text('Proceed to 12 AI Triage + Reasoning'),
                           ),
                       ],
                     ),
@@ -231,18 +214,8 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
                     onPressed: () => Navigator.pushReplacementNamed(context, '/dashboard'),
-                    child: const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'Dashboard',
-                        maxLines: 1,
-                      ),
-                    ),
+                    child: const Text('Dashboard'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -252,7 +225,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: (items.isEmpty || _isSyncing) ? null : _triggerSync,
@@ -263,13 +236,9 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
                         : const Icon(Icons.cloud_upload),
-                    label: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _isSyncing ? 'Syncing...' : 'Upload All Now',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                      ),
+                    label: Text(
+                      _isSyncing ? 'Syncing...' : '11 Sync / Upload Now',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),

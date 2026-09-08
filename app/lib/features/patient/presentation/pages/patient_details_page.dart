@@ -20,7 +20,7 @@ class PatientDetailsPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Patient Details'),
+        title: const Text('07 Patient Details'),
         backgroundColor: const Color(0xFF2563EB),
         foregroundColor: Colors.white,
       ),
@@ -100,13 +100,14 @@ class PatientDetailsPage extends StatelessWidget {
                     _buildInfoRow(Icons.phone_outlined, 'Phone', patient.phone),
                     const Divider(height: 20),
                     _buildInfoRow(Icons.location_on_outlined, 'Village / Ward', patient.village),
-                    const Divider(height: 20),
-                    _buildInfoRow(Icons.bloodtype_outlined, 'Blood Group', patient.bloodGroup ?? 'Not Tested'),
-                    const Divider(height: 20),
+                    if (patient.dob != null && patient.dob!.isNotEmpty) ...[
+                      _buildInfoRow(Icons.calendar_today_outlined, 'Date of Birth', patient.dob!),
+                      const Divider(height: 20),
+                    ],
                     _buildInfoRow(
                       Icons.cloud_done_outlined,
                       'Sync Status',
-                      patient.isSynced ? 'Synced to Cloud' : 'Saved on Device (Waiting to Sync)',
+                      patient.isSynced ? 'Synced to Cloud' : 'Queued Locally (SQLite)',
                       isSync: true,
                       synced: patient.isSynced,
                     ),
@@ -128,13 +129,9 @@ class PatientDetailsPage extends StatelessWidget {
                 Navigator.pushNamed(context, '/assessment/form');
               },
               icon: const Icon(Icons.medical_services_outlined),
-              label: const Flexible(
-                child: Text(
-                  'Start Health Checkup (Symptoms & Vitals)',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              label: const Text(
+                'Proceed to 08 Symptoms + Vitals',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
             const SizedBox(height: 12),
