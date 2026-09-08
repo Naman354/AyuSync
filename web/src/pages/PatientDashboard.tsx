@@ -7,7 +7,7 @@ import {
   Plus, X, HeartPulse, Pill, ClipboardList,
   ShieldCheck, Printer, CheckCircle2, Stethoscope, Check,
   Building2, MapPin, Phone, Clock, Activity, Calendar,
-  Ambulance, UserCheck, History, Sparkles
+  Ambulance, UserCheck, History, Sparkles, ChevronRight
 } from 'lucide-react';
 
 const COMPLETED_TASKS_KEY = 'ayusync_completed_task_ids';
@@ -28,6 +28,33 @@ export function markTaskAsCompletedGlobally(id: string) {
     localStorage.setItem(COMPLETED_TASKS_KEY, JSON.stringify(Array.from(ids)));
     window.dispatchEvent(new CustomEvent('ayusync:task_completed', { detail: { id, status: 'COMPLETED' } }));
   } catch {}
+}
+
+// ── Safe Helpers for Dates and Clinical Observations (prevents render crashes) ──
+function safeFormatDate(val?: any, options?: Intl.DateTimeFormatOptions): string {
+  if (!val) return '';
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-IN', options || { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
+function renderClinicalObs(obs: any): string {
+  if (!obs) return '';
+  if (typeof obs === 'string') return obs;
+  if (Array.isArray(obs)) {
+    return obs
+      .map((item: any) => (typeof item === 'string' ? item : item?.note || item?.observation || ''))
+      .filter(Boolean)
+      .join('; ');
+  }
+  if (typeof obs === 'object') {
+    return obs.note || obs.observation || '';
+  }
+  return String(obs);
 }
 
 // ── Realistic Demo Fallback for Ramesh Kulkarni & Demo Patients ──
@@ -224,13 +251,13 @@ const NEARBY_FACILITIES = [
     id: 'fac-khandala-phc',
     name: 'Khandala Primary Health Centre',
     type: 'Primary Health Centre (PHC)',
-    tier: 'Level 1',
+    tier: 'Level 1 Facility',
     distance: '1.2 km',
-    travelTime: '~5 mins',
-    status: 'OPEN',
+    travelTime: '~5 mins away',
+    status: 'OPEN NOW',
     hours: '9:00 AM – 4:00 PM',
     phone: '+91 2169 244102',
-    services: ['General Outpatient OPD', 'Basic Pathology & Blood Tests', 'NCD Clinic (Diabetes & BP)', 'Free Medicines Distribution'],
+    services: ['General OPD Consultations', 'Basic Pathology & Lab Tests', 'NCD Clinic (Diabetes & BP)', 'Free Medicines Distribution'],
     badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
   },
   {
@@ -239,24 +266,24 @@ const NEARBY_FACILITIES = [
     type: 'Community Health Centre (CHC)',
     tier: 'Level 2 Referral Hospital',
     distance: '18.0 km',
-    travelTime: '~25 mins',
+    travelTime: '~25 mins away',
     status: '24x7 OPEN',
     hours: '24 Hours Emergency & Inpatient',
     phone: '+91 2112 222108',
-    services: ['24x7 Emergency Room', 'Specialist Doctors & MO', 'Digital X-Ray & Diagnostics', '60-Bed Inpatient Care'],
+    services: ['24x7 Emergency Room', 'Specialist Doctors & Medical Officers', 'Digital X-Ray & Diagnostics', '60-Bed Inpatient Care'],
     badgeColor: 'bg-emerald-50 text-[#1e6641] border-emerald-200'
   },
   {
     id: 'fac-subcenter',
     name: 'Khandala Sub-Center & Health Wellness Clinic',
     type: 'Village Sub-Center / Ayushman Arogya Mandir',
-    tier: 'Doorstep Care',
+    tier: 'Doorstep Care Unit',
     distance: '400 m',
-    travelTime: 'Walking Distance',
-    status: 'OPEN',
+    travelTime: 'Walking Distance (3 mins)',
+    status: 'OPEN NOW',
     hours: '8:30 AM – 1:30 PM',
     phone: '+91 98220 11224',
-    services: ['Frontline ASHA Worker Desk', 'Routine Vitals & BP Check', 'Blood Sugar Screening', 'Maternal Antenatal Care'],
+    services: ['Frontline ASHA Worker Desk', 'Routine Blood Pressure Check', 'Blood Sugar Screening', 'Maternal & Antenatal Care'],
     badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
   }
 ];
@@ -269,6 +296,9 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedbackMsg, setFeedbackMsg] = useState('');
+
+  // Active Tab: 'REFERRALS' | 'CONDITIONS' | 'FACILITIES' | 'TIMELINE'
+  const [activeTab, setActiveTab] = useState<'REFERRALS' | 'CONDITIONS' | 'FACILITIES' | 'TIMELINE'>('REFERRALS');
 
   // Modals
   const [showCondModal, setShowCondModal] = useState(false);
@@ -419,7 +449,7 @@ export default function PatientDashboard() {
           <html>
             <head>
               <meta charset="utf-8">
-              <title>Registration Slip - ${patient?.name}</title>
+              <title>Registration Slip - ${patient?.name || 'Patient'}</title>
               <style>
                 @page { size: A4 portrait; margin: 10mm; }
                 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -484,14 +514,14 @@ export default function PatientDashboard() {
     return (
       <div className="max-w-6xl mx-auto space-y-5 animate-page-in p-2">
         <div className="skeleton h-36 w-full rounded-2xl" />
+        <div className="skeleton h-14 w-full rounded-xl" />
         <div className="grid lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 space-y-4">
+          <div className="lg:col-span-8 space-y-4">
             <div className="skeleton h-48 rounded-2xl" />
             <div className="skeleton h-48 rounded-2xl" />
           </div>
-          <div className="lg:col-span-5 space-y-4">
+          <div className="lg:col-span-4 space-y-4">
             <div className="skeleton h-64 rounded-2xl" />
-            <div className="skeleton h-48 rounded-2xl" />
           </div>
         </div>
       </div>
@@ -499,21 +529,22 @@ export default function PatientDashboard() {
   }
 
   const p = patient || DEMO_PATIENT_DATA['pat-ramesh-kulkarni'];
-  const { formatted: abhaFormatted } = ensure14DigitAbha(p.abhaId || p.identifiers?.[0]?.value);
-  const latestEncounter = p.encounters?.[0];
+  const { formatted: abhaFormatted } = ensure14DigitAbha(p?.abhaId || p?.identifiers?.[0]?.value || '91-8844-3321-0001');
+  const latestEncounter = p?.encounters?.[0];
   const latestVitals = latestEncounter?.vitals?.[0];
-  const allReferrals = p.referrals || [];
-  const activeReferrals = allReferrals.filter((r: any) => r.status !== 'COMPLETED' && r.status !== 'CANCELLED');
-  const pastReferrals = allReferrals.filter((r: any) => r.status === 'COMPLETED' || r.status === 'CANCELLED');
-  const conditions = p.conditions || [];
-  const activeConditions = conditions.filter((c: any) => c.status === 'ACTIVE');
-  const resolvedConditions = conditions.filter((c: any) => c.status !== 'ACTIVE');
-  const followUps = p.followUps || [];
-  const pendingFollowUps = followUps.filter((f: any) => f.status !== 'COMPLETED' && !completedTaskIds.has(f.id));
-  const encounters = p.encounters || [];
+  const allReferrals = p?.referrals || [];
+  const activeReferrals = allReferrals.filter((r: any) => r?.status !== 'COMPLETED' && r?.status !== 'CANCELLED');
+  const pastReferrals = allReferrals.filter((r: any) => r?.status === 'COMPLETED' || r?.status === 'CANCELLED');
+  const primaryReferral = activeReferrals[0] || pastReferrals[0] || allReferrals[0];
+  const conditions = p?.conditions || [];
+  const activeConditions = conditions.filter((c: any) => c?.status === 'ACTIVE');
+  const resolvedConditions = conditions.filter((c: any) => c?.status !== 'ACTIVE');
+  const followUps = p?.followUps || [];
+  const pendingFollowUps = followUps.filter((f: any) => f?.status !== 'COMPLETED' && !completedTaskIds.has(f?.id));
+  const encounters = p?.encounters || [];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-page-in">
+    <div className="max-w-6xl mx-auto space-y-5 pb-20 animate-page-in">
       <InlineError message={error} onDismiss={() => setError('')} />
 
       {feedbackMsg && (
@@ -528,20 +559,20 @@ export default function PatientDashboard() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="w-14 h-14 rounded-2xl bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-bold text-xl shrink-0 shadow-inner">
-              {p.name?.charAt(0) || 'P'}
+              {p?.name?.charAt(0) || 'P'}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-900">{p.name}</h1>
+                <h1 className="text-xl font-bold text-gray-900">{p?.name || 'Ramesh Kulkarni'}</h1>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#1e6641] font-semibold border border-emerald-200 flex items-center gap-1">
                   <ShieldCheck size={12} /> Verified Patient Account
                 </span>
               </div>
               <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
-                <span>{p.age ? `${p.age} yrs` : '58 yrs'}</span>
-                <span>·</span><span>{p.gender || 'MALE'}</span>
-                <span>·</span><span>{p.village || p.address || 'Khandala Ward 2, Satara Road'}</span>
-                <span>·</span><span>{p.phone || '+91 91112 22333'}</span>
+                <span>{p?.age ? `${p.age} yrs` : '58 yrs'}</span>
+                <span>·</span><span>{p?.gender || 'MALE'}</span>
+                <span>·</span><span>{p?.village || p?.address || 'Khandala Ward 2, Satara Road'}</span>
+                <span>·</span><span>{p?.phone || '+91 91112 22333'}</span>
               </div>
               <div className="text-xs text-gray-600 font-mono mt-1.5 flex items-center gap-1.5">
                 <span className="text-gray-400 font-sans font-medium">ABHA Health ID:</span>
@@ -565,7 +596,7 @@ export default function PatientDashboard() {
           <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
             <div className="text-[11px] font-medium text-gray-500">Blood Pressure</div>
             <div className="text-sm font-bold text-gray-900 mt-0.5">
-              {latestVitals?.bloodPressure || '136/86 mmHg'}
+              {latestVitals?.bloodPressure || latestVitals?.blood_pressure || '136/86 mmHg'}
             </div>
             <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">✓ Target Controlled</div>
           </div>
@@ -600,7 +631,7 @@ export default function PatientDashboard() {
         </div>
       </div>
 
-      {/* ── 2. Health Summary & Care Plan Status Banner ── */}
+      {/* ── 2. Concise Health Summary & Care Plan Status Banner ── */}
       <div className="bg-linear-to-r from-emerald-900 via-[#1e6641] to-[#165032] rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1 max-w-xl">
           <div className="flex items-center gap-2">
@@ -628,416 +659,555 @@ export default function PatientDashboard() {
         </div>
       </div>
 
-      {/* ── 3. Main Two-Column Dashboard Grid ── */}
+      {/* ── 3. Structured Tab Switcher (Intuitive Navigation) ── */}
+      <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto scrollbar-none pt-1">
+        <button
+          onClick={() => setActiveTab('REFERRALS')}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'REFERRALS'
+              ? 'border-[#1e6641] text-[#1e6641] bg-white rounded-t-xl'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Stethoscope size={15} />
+          <span>Current Referrals & Doctor Care Plans</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+            activeTab === 'REFERRALS' ? 'bg-[#e4efe7] text-[#1e6641]' : 'bg-gray-100 text-gray-600'
+          }`}>
+            {activeReferrals.length > 0 ? `${activeReferrals.length} Active` : `${allReferrals.length}`}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('CONDITIONS')}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'CONDITIONS'
+              ? 'border-[#1e6641] text-[#1e6641] bg-white rounded-t-xl'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <HeartPulse size={15} />
+          <span>Medical History & Conditions</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+            activeTab === 'CONDITIONS' ? 'bg-[#e4efe7] text-[#1e6641]' : 'bg-gray-100 text-gray-600'
+          }`}>
+            {conditions.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('FACILITIES')}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'FACILITIES'
+              ? 'border-[#1e6641] text-[#1e6641] bg-white rounded-t-xl'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Building2 size={15} />
+          <span>Nearby Healthcare Facilities</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+            3 Facilities
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('TIMELINE')}
+          className={`px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'TIMELINE'
+              ? 'border-[#1e6641] text-[#1e6641] bg-white rounded-t-xl'
+              : 'border-transparent text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          <Activity size={15} />
+          <span>Recent Medical Activity & Timeline</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+            activeTab === 'TIMELINE' ? 'bg-[#e4efe7] text-[#1e6641]' : 'bg-gray-100 text-gray-600'
+          }`}>
+            {encounters.length} Visits
+          </span>
+        </button>
+      </div>
+
+      {/* ── 4. Main Two-Column Layout ── */}
       <div className="grid lg:grid-cols-12 gap-6 items-start">
-        {/* ── LEFT / MAIN COLUMN (7 cols) ── */}
-        <div className="lg:col-span-7 space-y-6">
+        {/* ── MAIN COLUMN (8 cols) ── */}
+        <div className="lg:col-span-8 space-y-6">
 
-          {/* Section: Upcoming Care Continuity Actions (Bi-directional Sync) */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3">
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <ClipboardList size={16} className="text-[#1e6641]" />
-                <h3 className="text-sm font-bold text-gray-900">Upcoming Health Actions & Home Tasks</h3>
-              </div>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#1e6641] border border-emerald-200">
-                {pendingFollowUps.length} Pending
-              </span>
-            </div>
-
-            {followUps.length === 0 ? (
-              <p className="text-xs text-gray-400 py-3 italic text-center">No pending home tasks.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {followUps.map((f: any) => {
-                  const isFinished = f.status === 'COMPLETED' || completedTaskIds.has(f.id);
-
-                  return (
-                    <div
-                      key={f.id}
-                      className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
-                        isFinished
-                          ? 'bg-emerald-50/40 border-emerald-200 opacity-90'
-                          : 'bg-gray-50/70 border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-xs font-bold ${isFinished ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-                            {f.reason}
-                          </span>
-                          {isFinished ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                              <Check size={10} /> Completed & Synchronized
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                              Active Task
-                            </span>
-                          )}
-                        </div>
-                        {f.notes && (
-                          <p className="text-[11px] text-gray-600">
-                            {f.notes}
-                          </p>
-                        )}
-                        <div className="text-[10px] text-gray-400 flex items-center gap-2 flex-wrap">
-                          <span>Frontline: {f.worker?.user?.name || 'Sunita Patil (ASHA)'}</span>
-                          <span>·</span>
-                          <span>Due: {new Date(f.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 self-start sm:self-center">
-                        {isFinished ? (
-                          <div className="text-xs text-emerald-700 font-bold flex items-center gap-1">
-                            <CheckCircle2 size={15} /> Finished
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleMarkTaskFinished(f.id, f.reason)}
-                            disabled={completingTaskId === f.id}
-                            className="px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-                          >
-                            <Check size={13} />
-                            Mark Finished
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Section: Current Active Referrals & Counter-Referral Care Plan */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Stethoscope size={16} className="text-[#1e6641]" />
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">Current Hospital Referrals & Doctor Care Plans</h3>
-                  <p className="text-[11px] text-gray-400">Official medical officer consultations and counter-referral guidance</p>
-                </div>
-              </div>
-              <span className="text-xs font-bold text-gray-500">
-                {activeReferrals.length} Active
-              </span>
-            </div>
-
-            {activeReferrals.length === 0 ? (
-              <div className="p-6 text-center rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-500">
-                <CheckCircle2 size={28} className="mx-auto text-[#1e6641] mb-1.5 opacity-80" />
-                <p className="font-semibold text-gray-800">No Pending Referrals</p>
-                <p className="text-gray-400 mt-0.5">All hospital referrals have been concluded.</p>
-              </div>
-            ) : (
-              activeReferrals.map((ref: any) => {
-                const counter = ref.counterReferral;
-                return (
-                  <div key={ref.id} className="rounded-xl border border-gray-200/80 p-4 space-y-3 bg-white">
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-bold text-gray-900">
-                            Referral to {ref.destination?.name || 'Baramati CHC'}
-                          </span>
-                          <StatusBadge status={ref.status} size="sm" />
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                            ref.urgency === 'URGENT' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {ref.urgency || 'PRIORITY'}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-gray-400 mt-0.5">
-                          Origin: <strong>{ref.origin?.name || 'Khandala Sub-Center'}</strong> · Ref ID: <span className="font-mono text-gray-600">{ref.id}</span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(ref.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </div>
-                    </div>
-
-                    {/* Initial Reason */}
-                    <div>
-                      <span className="text-[11px] font-semibold text-gray-500 block">Referral Reason / Chief Complaint:</span>
-                      <p className="text-xs text-gray-800 mt-0.5 font-medium leading-relaxed bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                        {ref.reason}
-                      </p>
-                    </div>
-
-                    {/* Doctor's Counter-Referral Actions & Recommendations */}
-                    {counter && (
-                      <div className="bg-emerald-50/50 rounded-xl p-3.5 border border-emerald-200 space-y-2.5">
-                        <div className="flex items-center justify-between pb-1.5 border-b border-emerald-200/60">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-950">
-                            <Stethoscope size={13} className="text-[#1e6641]" />
-                            Doctor's Consultation Outcome & Recommendations
-                          </div>
-                          <span className="text-[10px] font-bold bg-white text-[#1e6641] px-2 py-0.5 rounded border border-emerald-300">
-                            Verified Care Plan
-                          </span>
-                        </div>
-
-                        <div>
-                          <span className="text-[11px] font-bold text-emerald-900 block">Clinical Diagnosis & Evaluation:</span>
-                          <p className="text-xs text-emerald-950 mt-0.5 font-medium">
-                            {counter.outcome}
-                          </p>
-                        </div>
-
-                        {counter.treatment && (
-                          <div className="bg-white p-2.5 rounded-lg border border-emerald-200/60">
-                            <div className="text-[11px] font-bold text-emerald-900 flex items-center gap-1">
-                              <Pill size={12} className="text-[#1e6641]" /> Prescribed Treatment & Medications:
-                            </div>
-                            <p className="text-xs font-semibold text-gray-900 mt-0.5">
-                              {counter.treatment}
-                            </p>
-                          </div>
-                        )}
-
-                        {counter.instructions && (
-                          <div>
-                            <span className="text-[11px] font-bold text-emerald-900 block">Diet & Home Care Instructions:</span>
-                            <p className="text-xs text-gray-700 mt-0.5 leading-relaxed">
-                              {counter.instructions}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
+          {/* ════ TAB 1: CURRENT REFERRALS & CARE CONTINUITY ════ */}
+          {activeTab === 'REFERRALS' && (
+            <div className="space-y-6">
+              {/* Care Continuity Home Tasks (Bi-directional Synchronization) */}
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3">
+                <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList size={16} className="text-[#1e6641]" />
+                    <h3 className="text-sm font-bold text-gray-900">Care Continuity Tasks & Home Follow-ups</h3>
                   </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Section: Past Referrals & Consultation Archive */}
-          {pastReferrals.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <History size={16} className="text-[#1e6641]" />
-                  <h3 className="text-sm font-bold text-gray-900">Past Referrals & Consultations Archive</h3>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#1e6641] border border-emerald-200">
+                    {pendingFollowUps.length} Pending
+                  </span>
                 </div>
-                <span className="text-xs text-gray-400 font-medium">{pastReferrals.length} Completed</span>
+
+                {followUps.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-3 italic text-center">No pending home tasks.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {followUps.map((f: any) => {
+                      const isFinished = f?.status === 'COMPLETED' || completedTaskIds.has(f?.id);
+
+                      return (
+                        <div
+                          key={f?.id || Math.random()}
+                          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all ${
+                            isFinished
+                              ? 'bg-emerald-50/40 border-emerald-200 opacity-90'
+                              : 'bg-gray-50/70 border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs font-bold ${isFinished ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                                {f?.reason}
+                              </span>
+                              {isFinished ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                  <Check size={10} /> Completed & Synchronized
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                  Active Follow-Up
+                                </span>
+                              )}
+                            </div>
+                            {f?.notes && (
+                              <p className="text-[11px] text-gray-600">
+                                {f.notes}
+                              </p>
+                            )}
+                            <div className="text-[10px] text-gray-400 flex items-center gap-2 flex-wrap">
+                              <span>Frontline: {f?.worker?.user?.name || 'Sunita Patil (ASHA)'}</span>
+                              <span>·</span>
+                              <span>Due: {safeFormatDate(f?.dueDate, { day: 'numeric', month: 'short' })}</span>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 self-start sm:self-center">
+                            {isFinished ? (
+                              <div className="text-xs text-emerald-700 font-bold flex items-center gap-1">
+                                <CheckCircle2 size={15} /> Finished
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleMarkTaskFinished(f?.id, f?.reason)}
+                                disabled={completingTaskId === f?.id}
+                                className="px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                              >
+                                <Check size={13} />
+                                Mark as Finished
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-3">
-                {pastReferrals.map((pr: any) => (
-                  <div key={pr.id} className="p-3.5 rounded-xl bg-gray-50 border border-gray-100 space-y-2 text-xs">
-                    <div className="flex items-center justify-between flex-wrap gap-1">
-                      <div className="font-bold text-gray-900">{pr.reason}</div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        ✓ COMPLETED
+              {/* Current Active Referrals & Doctor Recommendations */}
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <Stethoscope size={16} className="text-[#1e6641]" />
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900">Current Hospital Referrals & Doctor Care Plans</h3>
+                      <p className="text-[11px] text-gray-400">Official medical officer consultations and counter-referral guidance</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-gray-500">
+                    {activeReferrals.length} Active
+                  </span>
+                </div>
+
+                {activeReferrals.length === 0 ? (
+                  <div className="p-6 text-center rounded-xl bg-gray-50 border border-gray-100 text-xs text-gray-500">
+                    <CheckCircle2 size={28} className="mx-auto text-[#1e6641] mb-1.5 opacity-80" />
+                    <p className="font-semibold text-gray-800">No Pending Referrals</p>
+                    <p className="text-gray-400 mt-0.5">All hospital referrals have been concluded.</p>
+                  </div>
+                ) : (
+                  activeReferrals.map((ref: any) => {
+                    const counter = ref?.counterReferral;
+                    return (
+                      <div key={ref?.id || Math.random()} className="rounded-xl border border-gray-200/80 p-4 space-y-3 bg-white">
+                        {/* Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-100">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-gray-900">
+                                Referral to {ref?.destination?.name || 'Baramati CHC'}
+                              </span>
+                              <StatusBadge status={ref?.status} size="sm" />
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                ref?.urgency === 'URGENT' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {ref?.urgency || 'PRIORITY'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-400 mt-0.5">
+                              Origin: <strong>{ref?.origin?.name || 'Khandala Sub-Center'}</strong> · Ref ID: <span className="font-mono text-gray-600">{ref?.id}</span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {safeFormatDate(ref?.createdAt, { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        </div>
+
+                        {/* Initial Reason */}
+                        <div>
+                          <span className="text-[11px] font-semibold text-gray-500 block">Referral Reason / Chief Complaint:</span>
+                          <p className="text-xs text-gray-800 mt-0.5 font-medium leading-relaxed bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                            {ref?.reason}
+                          </p>
+                        </div>
+
+                        {/* Doctor's Counter-Referral Actions & Recommendations */}
+                        {counter && (
+                          <div className="bg-emerald-50/50 rounded-xl p-3.5 border border-emerald-200 space-y-2.5">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-emerald-200/60">
+                              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-950">
+                                <Stethoscope size={13} className="text-[#1e6641]" />
+                                Doctor's Consultation Outcome & Home Care Advice
+                              </div>
+                              <span className="text-[10px] font-bold bg-white text-[#1e6641] px-2 py-0.5 rounded border border-emerald-300">
+                                Verified Care Plan
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-[11px] font-bold text-emerald-900 block">Clinical Diagnosis & Evaluation:</span>
+                              <p className="text-xs text-emerald-950 mt-0.5 font-medium">
+                                {counter.outcome}
+                              </p>
+                            </div>
+
+                            {counter.treatment && (
+                              <div className="bg-white p-2.5 rounded-lg border border-emerald-200/60">
+                                <div className="text-[11px] font-bold text-emerald-900 flex items-center gap-1">
+                                  <Pill size={12} className="text-[#1e6641]" /> Prescribed Treatment & Medications:
+                                </div>
+                                <p className="text-xs font-semibold text-gray-900 mt-0.5">
+                                  {counter.treatment}
+                                </p>
+                              </div>
+                            )}
+
+                            {counter.instructions && (
+                              <div>
+                                <span className="text-[11px] font-bold text-emerald-900 block">Diet & Home Care Instructions:</span>
+                                <p className="text-xs text-gray-700 mt-0.5 leading-relaxed">
+                                  {counter.instructions}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Past Referrals & Consultation Archive */}
+              {pastReferrals.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <History size={16} className="text-[#1e6641]" />
+                      <h3 className="text-sm font-bold text-gray-900">Past Referrals & Consultations Archive</h3>
+                    </div>
+                    <span className="text-xs text-gray-400 font-medium">{pastReferrals.length} Completed</span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {pastReferrals.map((pr: any) => (
+                      <div key={pr?.id || Math.random()} className="p-3.5 rounded-xl bg-gray-50 border border-gray-100 space-y-2 text-xs">
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                          <div className="font-bold text-gray-900">{pr?.reason}</div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            ✓ COMPLETED
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-gray-500">
+                          Facility: <strong>{pr?.destination?.name || 'Khandala PHC'}</strong> · {safeFormatDate(pr?.createdAt, { month: 'short', year: 'numeric' })}
+                        </div>
+                        {pr?.counterReferral && (
+                          <p className="text-gray-700 bg-white p-2.5 rounded-lg border border-gray-100 text-[11px] leading-relaxed">
+                            <strong className="text-gray-900">Outcome:</strong> {pr.counterReferral.outcome}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════ TAB 2: MEDICAL HISTORY & CONDITIONS ════ */}
+          {activeTab === 'CONDITIONS' && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <HeartPulse size={16} className="text-[#1e6641]" />
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Medical History & Chronic Conditions</h3>
+                    <p className="text-[11px] text-gray-400">Recorded chronic conditions, diagnoses, and medical background</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCondModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#1e6641] hover:bg-[#165032] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus size={13} /> Add Condition
+                </button>
+              </div>
+
+              {/* Active Conditions */}
+              <div className="space-y-2.5">
+                <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">Ongoing / Active Conditions ({activeConditions.length})</div>
+                {activeConditions.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic p-3 bg-gray-50 rounded-xl">No active conditions recorded.</p>
+                ) : (
+                  activeConditions.map((c: any) => (
+                    <div key={c?.id || Math.random()} className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200/80 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-gray-900 text-sm">{c?.name}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                          ACTIVE
+                        </span>
+                      </div>
+                      {c?.notes && <p className="text-xs text-gray-700 leading-relaxed">{c.notes}</p>}
+                      <div className="text-[10px] text-gray-400">
+                        {c?.diagnosedAt ? `Diagnosed: ${safeFormatDate(c.diagnosedAt, { month: 'short', year: 'numeric' })}` : 'Historical Condition'}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Resolved Conditions */}
+              {resolvedConditions.length > 0 && (
+                <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                  <div className="text-xs font-bold text-gray-700 uppercase tracking-wide">Resolved / Past Medical History ({resolvedConditions.length})</div>
+                  {resolvedConditions.map((c: any) => (
+                    <div key={c?.id || Math.random()} className="p-3.5 rounded-xl bg-gray-50 border border-gray-200/70 text-xs space-y-1.5 opacity-90">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-gray-800 text-sm">{c?.name}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
+                          RESOLVED
+                        </span>
+                      </div>
+                      {c?.notes && <p className="text-xs text-gray-600 leading-relaxed">{c.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════ TAB 3: NEARBY HEALTHCARE FACILITIES ════ */}
+          {activeTab === 'FACILITIES' && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Building2 size={16} className="text-[#1e6641]" />
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Nearby Healthcare Facilities Network</h3>
+                    <p className="text-[11px] text-gray-400">Available public clinics, primary health centres, and referral hospitals in your local block</p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-[#1e6641] border border-emerald-200">
+                  Khandala Block Network
+                </span>
+              </div>
+
+              <div className="space-y-3.5">
+                {NEARBY_FACILITIES.map(fac => (
+                  <div key={fac.id} className="p-4 rounded-xl border border-gray-200/80 bg-gray-50/70 space-y-2.5 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-gray-900 leading-snug">{fac.name}</h4>
+                        <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                          <MapPin size={11} className="text-gray-400 shrink-0" />
+                          <span><strong>{fac.distance}</strong> ({fac.travelTime})</span>
+                          <span>·</span>
+                          <span className="text-[#1e6641] font-medium">{fac.tier}</span>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${fac.badgeColor}`}>
+                        {fac.status}
                       </span>
                     </div>
-                    <div className="text-[11px] text-gray-500">
-                      Facility: <strong>{pr.destination?.name || 'Khandala PHC'}</strong> · {new Date(pr.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+
+                    <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                      <Clock size={12} className="text-gray-400 shrink-0" />
+                      <span>{fac.hours}</span>
                     </div>
-                    {pr.counterReferral && (
-                      <p className="text-gray-700 bg-white p-2.5 rounded-lg border border-gray-100 text-[11px] leading-relaxed">
-                        <strong className="text-gray-900">Outcome:</strong> {pr.counterReferral.outcome}
-                      </p>
-                    )}
+
+                    <div className="pt-2 border-t border-gray-200/60">
+                      <div className="text-[11px] font-semibold text-gray-500 mb-1.5">Available Services & Clinics:</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {fac.services.map((svc, i) => (
+                          <span key={i} className="text-[10.5px] bg-white border border-gray-200 px-2 py-0.5 rounded-md text-gray-700">
+                            {svc}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between text-xs">
+                      <a
+                        href={`tel:${fac.phone.replace(/\s+/g, '')}`}
+                        className="text-[#1e6641] hover:underline font-bold flex items-center gap-1.5 text-xs bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
+                      >
+                        <Phone size={12} /> Call Clinic: {fac.phone}
+                      </a>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Section: Recent Medical Activity & Encounter Timeline */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Activity size={16} className="text-[#1e6641]" />
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">Recent Medical Activity & Visit Timeline</h3>
-                  <p className="text-[11px] text-gray-400">Chronological history of clinic encounters, field visits, and lab tests</p>
-                </div>
-              </div>
-              <span className="text-xs text-gray-400 font-medium">{encounters.length} Visits</span>
-            </div>
-
-            <div className="space-y-4 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-gray-200">
-              {encounters.map((enc: any, idx: number) => {
-                const vit = enc.vitals?.[0];
-
-                return (
-                  <div key={enc.id || idx} className="relative flex items-start gap-4 pl-8">
-                    <div className="absolute left-2 top-1.5 w-3.5 h-3.5 rounded-full bg-[#1e6641] border-2 border-white shadow-xs" />
-                    <div className="bg-gray-50/80 rounded-xl p-3.5 border border-gray-100 w-full space-y-1.5">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="text-xs font-bold text-gray-900">
-                          {enc.facilityName || (enc.type === 'CLINIC_VISIT' ? 'Baramati Community Health Centre' : 'Khandala Sub-Center Field Visit')}
-                        </div>
-                        <span className="text-[10px] font-mono text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
-                          {new Date(enc.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
-                      </div>
-
-                      {enc.provider && (
-                        <div className="text-[11px] text-[#1e6641] font-semibold flex items-center gap-1">
-                          <UserCheck size={11} /> {enc.provider}
-                        </div>
-                      )}
-
-                      {vit && (
-                        <div className="flex items-center gap-3 text-[11px] font-mono bg-white p-2 rounded-lg border border-gray-100 flex-wrap">
-                          <span>BP: <strong>{vit.bloodPressure || '136/86'}</strong></span>
-                          <span>HR: <strong>{vit.heartRate || 74} bpm</strong></span>
-                          {vit.bloodGlucose && <span>Sugar: <strong>{vit.bloodGlucose} mg/dL</strong></span>}
-                          <span>SpO2: <strong>{vit.spo2 || 98}%</strong></span>
-                        </div>
-                      )}
-
-                      {enc.clinicalObs && (
-                        <p className="text-[11px] text-gray-700 leading-relaxed pt-0.5">
-                          {enc.clinicalObs}
-                        </p>
-                      )}
-                    </div>
+          {/* ════ TAB 4: RECENT MEDICAL ACTIVITY & TIMELINE ════ */}
+          {activeTab === 'TIMELINE' && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-2.5 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Activity size={16} className="text-[#1e6641]" />
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Recent Medical Activity & Visit Timeline</h3>
+                    <p className="text-[11px] text-gray-400">Chronological history of clinic encounters, doorstep field visits, and assessments</p>
                   </div>
-                );
-              })}
+                </div>
+                <span className="text-xs text-gray-400 font-medium">{encounters.length} Visits Recorded</span>
+              </div>
+
+              <div className="space-y-4 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-gray-200">
+                {encounters.map((enc: any, idx: number) => {
+                  const vit = enc?.vitals?.[0];
+                  const obsText = renderClinicalObs(enc?.clinicalObs);
+
+                  return (
+                    <div key={enc?.id || idx} className="relative flex items-start gap-4 pl-8">
+                      <div className="absolute left-2 top-1.5 w-3.5 h-3.5 rounded-full bg-[#1e6641] border-2 border-white shadow-xs" />
+                      <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 w-full space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="text-xs font-bold text-gray-900">
+                            {enc?.facilityName || (enc?.type === 'CLINIC_VISIT' ? 'Baramati Community Health Centre' : 'Khandala Sub-Center Field Visit')}
+                          </div>
+                          <span className="text-[10px] font-mono text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
+                            {safeFormatDate(enc?.start, { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+
+                        {enc?.provider && (
+                          <div className="text-xs text-[#1e6641] font-semibold flex items-center gap-1">
+                            <UserCheck size={12} /> {enc.provider}
+                          </div>
+                        )}
+
+                        {vit && (
+                          <div className="flex items-center gap-3 text-xs font-mono bg-white p-2.5 rounded-lg border border-gray-100 flex-wrap">
+                            <span>BP: <strong>{vit?.bloodPressure || '136/86'}</strong></span>
+                            <span>HR: <strong>{vit?.heartRate || 74} bpm</strong></span>
+                            {vit?.bloodGlucose && <span>Sugar: <strong>{vit.bloodGlucose} mg/dL</strong></span>}
+                            <span>SpO2: <strong>{vit?.spo2 || 98}%</strong></span>
+                          </div>
+                        )}
+
+                        {obsText && (
+                          <p className="text-xs text-gray-700 leading-relaxed pt-0.5">
+                            {obsText}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
         </div>
 
-        {/* ── RIGHT / SIDEBAR COLUMN (5 cols) ── */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* ── SIDEBAR COLUMN (4 cols) ── */}
+        <div className="lg:col-span-4 space-y-6">
 
-          {/* Section: Nearby Healthcare Facilities */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3.5">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Building2 size={16} className="text-[#1e6641]" />
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">Nearby Healthcare Facilities</h3>
-                  <p className="text-[11px] text-gray-400">Available health facilities in your local block</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-                Khandala Block
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {NEARBY_FACILITIES.map(fac => (
-                <div key={fac.id} className="p-3.5 rounded-xl border border-gray-100 bg-gray-50/70 space-y-2 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900 leading-snug">{fac.name}</h4>
-                      <div className="text-[10px] text-gray-500 flex items-center gap-1.5 mt-0.5">
-                        <MapPin size={10} className="text-gray-400 shrink-0" />
-                        <span><strong>{fac.distance}</strong> ({fac.travelTime})</span>
-                        <span>·</span>
-                        <span>{fac.tier}</span>
-                      </div>
-                    </div>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${fac.badgeColor}`}>
-                      {fac.status}
-                    </span>
-                  </div>
-
-                  <div className="text-[10px] text-gray-600 flex items-center gap-1">
-                    <Clock size={10} className="text-gray-400 shrink-0" />
-                    <span>{fac.hours}</span>
-                  </div>
-
-                  <div className="pt-1.5 border-t border-gray-200/50">
-                    <div className="text-[10px] font-semibold text-gray-500 mb-1">Available Services:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {fac.services.map((svc, i) => (
-                        <span key={i} className="text-[9.5px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-700">
-                          {svc}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-1 flex items-center justify-between text-[11px]">
-                    <a
-                      href={`tel:${fac.phone.replace(/\s+/g, '')}`}
-                      className="text-[#1e6641] hover:underline font-semibold flex items-center gap-1 text-[11px]"
-                    >
-                      <Phone size={11} /> {fac.phone}
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Section: Medical History & Chronic Conditions */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3.5">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <HeartPulse size={16} className="text-[#1e6641]" />
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">Medical History & Conditions</h3>
-                  <p className="text-[11px] text-gray-400">Recorded chronic conditions and historical health data</p>
-                </div>
-              </div>
+          {/* Quick Switch Cards */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3">
+            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Quick Navigation</h3>
+            <div className="space-y-1.5 text-xs">
               <button
-                onClick={() => setShowCondModal(true)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                onClick={() => setActiveTab('REFERRALS')}
+                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                  activeTab === 'REFERRALS' ? 'bg-[#e4efe7] border-[#1e6641] font-bold text-[#1e6641]' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                }`}
               >
-                <Plus size={11} /> Add
+                <div className="flex items-center gap-2">
+                  <Stethoscope size={14} />
+                  <span>Referrals & Doctor Plan</span>
+                </div>
+                <ChevronRight size={13} />
+              </button>
+
+              <button
+                onClick={() => setActiveTab('CONDITIONS')}
+                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                  activeTab === 'CONDITIONS' ? 'bg-[#e4efe7] border-[#1e6641] font-bold text-[#1e6641]' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <HeartPulse size={14} />
+                  <span>Medical Conditions ({conditions.length})</span>
+                </div>
+                <ChevronRight size={13} />
+              </button>
+
+              <button
+                onClick={() => setActiveTab('FACILITIES')}
+                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                  activeTab === 'FACILITIES' ? 'bg-[#e4efe7] border-[#1e6641] font-bold text-[#1e6641]' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Building2 size={14} />
+                  <span>Nearby Health Facilities</span>
+                </div>
+                <ChevronRight size={13} />
+              </button>
+
+              <button
+                onClick={() => setActiveTab('TIMELINE')}
+                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                  activeTab === 'TIMELINE' ? 'bg-[#e4efe7] border-[#1e6641] font-bold text-[#1e6641]' : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Activity size={14} />
+                  <span>Visit Activity Timeline</span>
+                </div>
+                <ChevronRight size={13} />
               </button>
             </div>
-
-            {/* Active Conditions */}
-            <div className="space-y-2">
-              <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Ongoing / Active:</div>
-              {activeConditions.length === 0 ? (
-                <p className="text-xs text-gray-400 italic">No active conditions recorded.</p>
-              ) : (
-                activeConditions.map((c: any) => (
-                  <div key={c.id} className="p-3 rounded-xl bg-amber-50/60 border border-amber-200/80 text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-gray-900">{c.name}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                        ACTIVE
-                      </span>
-                    </div>
-                    {c.notes && <p className="text-[11px] text-gray-600">{c.notes}</p>}
-                    <div className="text-[10px] text-gray-400">
-                      {c.diagnosedAt ? `Diagnosed: ${new Date(c.diagnosedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}` : 'Historical'}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Resolved Conditions */}
-            {resolvedConditions.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-gray-100">
-                <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Resolved / Past History:</div>
-                {resolvedConditions.map((c: any) => (
-                  <div key={c.id} className="p-3 rounded-xl bg-gray-50 border border-gray-200/70 text-xs space-y-1 opacity-90">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-700">{c.name}</span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">
-                        RESOLVED
-                      </span>
-                    </div>
-                    {c.notes && <p className="text-[11px] text-gray-500">{c.notes}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* Section: Emergency & Quick Helpline Support */}
+          {/* Section: Emergency & Quick Contacts */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-xs space-y-3">
             <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
               <Ambulance size={16} className="text-red-600" />
-              Emergency & Healthcare Contacts
+              Emergency & Support Contacts
             </h3>
 
             <div className="space-y-2.5">
@@ -1050,7 +1220,7 @@ export default function PatientDashboard() {
                     108
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-red-900">National Free Emergency Ambulance</div>
+                    <div className="text-xs font-bold text-red-900">National Ambulance</div>
                     <div className="text-[10px] text-red-700">24x7 Government Health Emergency</div>
                   </div>
                 </div>
@@ -1062,9 +1232,9 @@ export default function PatientDashboard() {
                   <span className="font-bold text-emerald-950">ASHA Worker: Sunita Patil</span>
                   <a
                     href="tel:+919822011224"
-                    className="text-[#1e6641] font-bold text-[11px] flex items-center gap-1 hover:underline"
+                    className="text-[#1e6641] font-bold text-[11px] flex items-center gap-1 hover:underline bg-white px-2 py-0.5 rounded border border-emerald-300"
                   >
-                    <Phone size={12} /> Call
+                    <Phone size={11} /> Call
                   </a>
                 </div>
                 <div className="text-[10px] text-emerald-800">
@@ -1202,11 +1372,11 @@ export default function PatientDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-gray-50 p-3 rounded-lg border border-gray-300 text-[11px]">
                   <div>
                     <span className="text-gray-500 block">Token Number:</span>
-                    <strong className="font-mono text-sm text-gray-900">AYU-{p.id ? p.id.slice(0, 8).toUpperCase() : '8844'}</strong>
+                    <strong className="font-mono text-sm text-gray-900">AYU-{p?.id ? String(p.id).slice(0, 8).toUpperCase() : '8844'}</strong>
                   </div>
                   <div>
                     <span className="text-gray-500 block">Date of Issue:</span>
-                    <strong>{new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                    <strong>{safeFormatDate(new Date().toISOString(), { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
                   </div>
                   <div>
                     <span className="text-gray-500 block">Primary Care Facility:</span>
@@ -1224,10 +1394,10 @@ export default function PatientDashboard() {
                     Patient Demographics & ABDM Identity
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-4 text-xs">
-                    <div><span className="text-gray-500">Name:</span> <strong className="text-gray-900">{p.name}</strong></div>
-                    <div><span className="text-gray-500">Age / Gender:</span> <strong>{p.age || '58'} yrs / {p.gender || 'MALE'}</strong></div>
-                    <div><span className="text-gray-500">Contact:</span> <strong>{p.phone || '+91 91112 22333'}</strong></div>
-                    <div><span className="text-gray-500">Village / Address:</span> <strong>{p.village || 'Khandala Ward 2'}</strong></div>
+                    <div><span className="text-gray-500">Name:</span> <strong className="text-gray-900">{p?.name || 'Ramesh Kulkarni'}</strong></div>
+                    <div><span className="text-gray-500">Age / Gender:</span> <strong>{p?.age || '58'} yrs / {p?.gender || 'MALE'}</strong></div>
+                    <div><span className="text-gray-500">Contact:</span> <strong>{p?.phone || '+91 91112 22333'}</strong></div>
+                    <div><span className="text-gray-500">Village / Address:</span> <strong>{p?.village || 'Khandala Ward 2, Satara Road'}</strong></div>
                     <div className="col-span-2">
                       <span className="text-gray-500">14-Digit ABHA ID:</span>{' '}
                       <strong className="font-mono bg-gray-100 px-2 py-0.5 rounded border border-gray-300">{abhaFormatted}</strong>
@@ -1243,7 +1413,7 @@ export default function PatientDashboard() {
                   <div className="grid grid-cols-4 gap-2 text-center text-xs">
                     <div className="bg-gray-50 p-2 rounded border border-gray-200">
                       <div className="text-[10px] text-gray-500">Blood Pressure</div>
-                      <div className="font-bold mt-0.5">{latestVitals?.bloodPressure || '136/86 mmHg'}</div>
+                      <div className="font-bold mt-0.5">{latestVitals?.bloodPressure || latestVitals?.blood_pressure || '136/86 mmHg'}</div>
                     </div>
                     <div className="bg-gray-50 p-2 rounded border border-gray-200">
                       <div className="text-[10px] text-gray-500">Blood Glucose</div>
@@ -1261,7 +1431,7 @@ export default function PatientDashboard() {
                 </div>
 
                 {/* Current Active Care Plan & Doctor Prescription */}
-                {activeReferrals[0]?.counterReferral && (
+                {primaryReferral?.counterReferral && (
                   <div className="border border-gray-300 rounded-lg p-3 space-y-2 bg-emerald-50/30">
                     <div className="font-bold text-xs uppercase tracking-wide text-emerald-950 border-b border-emerald-200 pb-1">
                       Doctor's Consultation Outcome & Home Care Protocol
@@ -1269,15 +1439,15 @@ export default function PatientDashboard() {
                     <div className="space-y-1.5 text-xs">
                       <div>
                         <span className="text-gray-500 block">Diagnosis:</span>
-                        <strong className="text-gray-900">{activeReferrals[0].counterReferral.outcome}</strong>
+                        <strong className="text-gray-900">{primaryReferral.counterReferral.outcome}</strong>
                       </div>
                       <div>
                         <span className="text-gray-500 block">Prescribed Medication:</span>
-                        <strong className="text-gray-900">{activeReferrals[0].counterReferral.treatment}</strong>
+                        <strong className="text-gray-900">{primaryReferral.counterReferral.treatment}</strong>
                       </div>
                       <div>
                         <span className="text-gray-500 block">Home Instructions:</span>
-                        <span className="text-gray-700">{activeReferrals[0].counterReferral.instructions}</span>
+                        <span className="text-gray-700">{primaryReferral.counterReferral.instructions}</span>
                       </div>
                     </div>
                   </div>

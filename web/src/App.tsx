@@ -314,6 +314,14 @@ function PatientsRouteGuard() {
   return <Patients />;
 }
 
+function PatientProfileGuard() {
+  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  if (user.role === 'PATIENT') {
+    return <Navigate to="/patient" replace />;
+  }
+  return <PatientProfile />;
+}
+
 // ─── Root app ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [splashDone, setSplashDone] = useState(
@@ -341,7 +349,7 @@ export default function App() {
             <Route path="/referral-success"  element={<ReferralSuccess />} />
             <Route path="/followups"         element={<CareGaps />} />
             <Route path="/patients"          element={<PatientsRouteGuard />} />
-            <Route path="/patients/:id"      element={<PatientProfile />} />
+            <Route path="/patients/:id"      element={<PatientProfileGuard />} />
             <Route path="/queue"             element={<Queue />} />
             <Route path="/facilities"        element={<FacilityReadiness />} />
           </Route>
