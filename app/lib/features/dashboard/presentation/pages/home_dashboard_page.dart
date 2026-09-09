@@ -1046,7 +1046,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                   const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF16A34A), size: 36),
                   const SizedBox(height: 8),
                   Text(
-                    _taskFilter == 'COMPLETED' ? 'No completed visits on this date' : 'No pending visits on this date! 🎉',
+                    _taskFilter == 'COMPLETED' ? 'No completed visits on this date' : 'No pending visits on this date!',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
                   ),
                 ],
@@ -1517,6 +1517,43 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                           ),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+
+                    // Clearly visible Logout button in Profile Section
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('profile_logout_button'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFDC2626),
+                          backgroundColor: const Color(0xFFFEF2F2),
+                          side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await state.logout();
+                          if (context.mounted) {
+                            Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                          }
+                        },
+                        icon: const Icon(Icons.logout_rounded, size: 20, color: Color(0xFFDC2626)),
+                        label: Text(
+                          state.translate('logout'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

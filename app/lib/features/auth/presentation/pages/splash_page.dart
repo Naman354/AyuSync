@@ -81,6 +81,9 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
     if (!mounted) return;
 
     final appState = Provider.of<AppState>(context, listen: false);
+    await appState.ensureSessionLoaded();
+    if (!mounted) return;
+
     if (appState.isLoggedIn) {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
