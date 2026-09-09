@@ -63,26 +63,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _handleBiometricLogin() async {
-    setState(() => _isLoading = true);
-    final appState = Provider.of<AppState>(context, listen: false);
-
-    final success = await appState.login('+919998887776', 'password123');
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Biometric Authentication Successful! Welcome, ${appState.workerName}.'),
-          backgroundColor: AppColors.forest,
-          duration: const Duration(seconds: 1),
-        ),
-      );
-      Navigator.pushReplacementNamed(context, '/home');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -292,67 +272,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
 
-                        const SizedBox(height: 18),
-
-                        // "or" Divider
-                        Center(
-                          child: Text(
-                            appState.translate('or_text'),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF94A3B8),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Biometric Fingerprint Button
-                        Center(
-                          child: InkWell(
-                            onTap: _handleBiometricLogin,
-                            borderRadius: BorderRadius.circular(28),
-                            child: Container(
-                              width: 54,
-                              height: 54,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFFD7F0DC),
-                              ),
-                              child: const Icon(
-                                Icons.fingerprint_rounded,
-                                color: AppColors.forest,
-                                size: 34,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        // Signup Button
-                        Center(
-                          child: TextButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Signup flow coming soon'),
-                                ),
-                              );
-                            },
-                            child: Text(
-                              appState.translate('login_signup_prompt'),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.forest,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),

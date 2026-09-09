@@ -819,11 +819,36 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
   Widget _buildUnifiedTasksSection(BuildContext context, AppState appState) {
     final allTasks = appState.followUpTasks;
     final now = DateTime.now();
-    final completedCount = allTasks.where((t) => t.isCompleted).length;
-    final double progress = allTasks.isEmpty ? 0.0 : (completedCount / allTasks.length);
+
+    // Dynamically retrieve the selected date from the date strip
+    final selectedDateIndex = _selectedDateIndex.clamp(0, _dateStrip.length - 1);
+    final selectedDateItem = _dateStrip[selectedDateIndex];
+    final selectedDate = selectedDateItem['date'] as DateTime;
+    final isSelectedDateToday = selectedDateItem['isToday'] == true;
+
+    bool isSameCalendarDay(DateTime a, DateTime b) {
+      return a.year == b.year && a.month == b.month && a.day == b.day;
+    }
+
+    // Filter tasks for the selected date
+    final dateTasks = allTasks.where((t) {
+      final onDate = isSameCalendarDay(t.dueDate, selectedDate);
+      if (isSelectedDateToday) {
+        // Today's view includes tasks due today OR past overdue tasks requiring urgent action
+        return onDate || (!t.isCompleted && t.dueDate.isBefore(now));
+      } else {
+        // Other calendar dates show tasks specifically scheduled on that date
+        return onDate;
+      }
+    }).toList();
+
+    final completedCount = dateTasks.where((t) => t.isCompleted).length;
+    final pendingCount = dateTasks.where((t) => !t.isCompleted).length;
+    final overdueCount = dateTasks.where((t) => !t.isCompleted && (t.status.toUpperCase() == 'OVERDUE' || t.dueDate.isBefore(now))).length;
+    final double progress = dateTasks.isEmpty ? 0.0 : (completedCount / dateTasks.length);
 
     // Apply Filter Tab
-    final filteredTasks = allTasks.where((t) {
+    final filteredTasks = dateTasks.where((t) {
       if (_taskFilter == 'OVERDUE') {
         return !t.isCompleted && (t.status.toUpperCase() == 'OVERDUE' || t.dueDate.isBefore(now));
       }
@@ -891,7 +916,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
 
           const SizedBox(height: 12),
 
-          // Progress Bar: Today's checklist
+          // Progress Bar: Selected date's checklist
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
@@ -905,11 +930,11 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Visits Completed: $completedCount of ${allTasks.length}',
+                      'Visits Completed: $completedCount of ${dateTasks.length}',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF334155)),
                     ),
                     Text(
-                      '${(progress * 100).toInt()}%',
+                      dateTasks.isEmpty ? '0%' : '${(progress * 100).toInt()}%',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.forest),
                     ),
                   ],
@@ -944,6 +969,9 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                 onTap: () {
                   setState(() {
                     _selectedDateIndex = index;
+                    if (_taskFilter == 'OVERDUE') {
+                      _taskFilter = 'TODAY';
+                    }
                   });
                 },
                 child: AnimatedContainer(
@@ -995,11 +1023,11 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _filterChip('TODAY', '${appState.translate('filter_today')} (${allTasks.length - completedCount})'),
+                _filterChip('TODAY', '${appState.translate('filter_today')} ($pendingCount)'),
                 const SizedBox(width: 8),
-                _filterChip('OVERDUE', appState.translate('filter_overdue')),
+                _filterChip('OVERDUE', '${appState.translate('filter_overdue')} ($overdueCount)'),
                 const SizedBox(width: 8),
-                _filterChip('ALL', '${appState.translate('filter_all')} (${allTasks.length})'),
+                _filterChip('ALL', '${appState.translate('filter_all')} (${dateTasks.length})'),
                 const SizedBox(width: 8),
                 _filterChip('COMPLETED', '${appState.translate('filter_completed')} ($completedCount)'),
               ],
@@ -1018,7 +1046,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
                   const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF16A34A), size: 36),
                   const SizedBox(height: 8),
                   Text(
-                    _taskFilter == 'COMPLETED' ? 'No completed visits yet' : 'No pending visits in this view! 🎉',
+                    _taskFilter == 'COMPLETED' ? 'No completed visits on this date' : 'No pending visits on this date! 🎉',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
                   ),
                 ],
@@ -1026,7 +1054,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
             )
           else
             Column(
-              children: filteredTasks.take(4).map((task) {
+              children: filteredTasks.map((task) {
                 return _buildTaskCard(context, appState, task);
               }).toList(),
             ),
