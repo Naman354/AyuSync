@@ -4,6 +4,7 @@ import '../../../../core/state/app_state.dart';
 import '../../../../core/models/assessment_model.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/patient_validators.dart';
+import '../../../../core/services/voice_recognition_service.dart';
 
 class AssessmentFormPage extends StatefulWidget {
   const AssessmentFormPage({super.key});
@@ -27,6 +28,11 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
   bool _isProcessing = false;
   final Map<String, String> _fieldErrors = {};
 
+  // Voice-to-Text Service (Configured for English recognition)
+  final VoiceRecognitionService _voiceService = VoiceRecognitionService();
+  bool _isListening = false;
+  String _speechBaseText = '';
+
   final List<Map<String, String>> _quickSymptomDefs = const [
     {'id': 'High Fever', 'key': 'symptom_high_fever'},
     {'id': 'Severe Breathlessness', 'key': 'symptom_breathlessness'},
@@ -40,6 +46,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
 
   @override
   void dispose() {
+    _voiceService.cancelListening();
     _symptomController.dispose();
     _notesController.dispose();
     _tempController.dispose();
@@ -48,6 +55,81 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     _pulseController.dispose();
     _spo2Controller.dispose();
     super.dispose();
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(fontWeight: FontWeight.w600))),
+          ],
+        ),
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  Future<void> _toggleVoiceInput(AppState appState) async {
+    if (_isListening) {
+      await _voiceService.stopListening();
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    _speechBaseText = _symptomController.text.trim();
+
+    setState(() => _isListening = true);
+
+    final started = await _voiceService.startListening(
+      onResult: (recognizedWords, isFinal) {
+        if (!mounted) return;
+        setState(() {
+          if (recognizedWords.trim().isNotEmpty) {
+            final combined = _speechBaseText.isEmpty
+                ? recognizedWords.trim()
+                : '$_speechBaseText ${recognizedWords.trim()}';
+            _symptomController.text = combined;
+            _symptomController.selection = TextSelection.fromPosition(
+              TextPosition(offset: combined.length),
+            );
+            _clearError('symptom');
+          }
+          if (isFinal) {
+            _isListening = false;
+          }
+        });
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() => _isListening = false);
+        final lower = err.toLowerCase();
+        if (lower.contains('permission') || lower.contains('denied') || lower.contains('microphone')) {
+          _showError(appState.translate('voice_permission_denied'));
+        } else if (lower.contains('not available') || lower.contains('unavailable')) {
+          _showError(appState.translate('voice_not_available'));
+        } else {
+          _showError(appState.translate('voice_error', args: {'error': err}));
+        }
+      },
+      onDone: () {
+        if (mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+
+    if (!started && mounted) {
+      setState(() => _isListening = false);
+    }
   }
 
   void _clearError(String key) {
@@ -111,26 +193,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     });
 
     if (errors.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  errors.values.first,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: const Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
+      _showError(errors.values.first);
       return false;
     }
     return true;
@@ -141,12 +204,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     final patient = appState.currentPatient ?? (appState.patients.isNotEmpty ? appState.patients.first : null);
 
     if (patient == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(appState.translate('no_patient_selected_msg')),
-          backgroundColor: const Color(0xFFDC2626),
-        ),
-      );
+      _showError(appState.translate('no_patient_selected_msg'));
       return;
     }
 
@@ -468,7 +526,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
 
                     const SizedBox(height: 14),
 
-                    // Primary Symptom Input
+                    // Primary Symptom Input with Voice-to-Text
                     _buildTextField(
                       controller: _symptomController,
                       label: appState.translate('primary_symptom'),
@@ -476,11 +534,114 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                       icon: Icons.sick_outlined,
                       maxLines: 2,
                       errorText: _fieldErrors['symptom'],
+                      suffixIcon: Padding(
+                        padding: const EdgeInsets.only(right: 6.0),
+                        child: IconButton(
+                          icon: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: _isListening
+                                ? Container(
+                                    key: const ValueKey('mic_active'),
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFDC2626),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFDC2626).withValues(alpha: 0.4),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+                                  )
+                                : Container(
+                                    key: const ValueKey('mic_idle'),
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.mintLight,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: AppColors.forest.withValues(alpha: 0.3)),
+                                    ),
+                                    child: const Icon(Icons.mic_none_rounded, color: AppColors.forest, size: 20),
+                                  ),
+                          ),
+                          tooltip: _isListening
+                              ? appState.translate('voice_tap_to_stop')
+                              : appState.translate('voice_input_tooltip'),
+                          onPressed: () => _toggleVoiceInput(appState),
+                        ),
+                      ),
                       onChanged: (_) {
                         _clearError('symptom');
                         setState(() {});
                       },
                     ),
+
+                    if (_isListening) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFDC2626).withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFDC2626)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                appState.translate('voice_listening'),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () => _toggleVoiceInput(appState),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDC2626),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.stop_rounded, color: Colors.white, size: 14),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      appState.translate('voice_tap_to_stop'),
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 14),
 
@@ -499,8 +660,9 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                               const SizedBox(height: 6),
                               DropdownButtonFormField<String>(
                                 initialValue: _selectedSeverity,
+                                isExpanded: true,
                                 decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
@@ -511,9 +673,30 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                                   ),
                                 ),
                                 items: [
-                                  DropdownMenuItem(value: 'MILD', child: Text(appState.translate('severity_mild'))),
-                                  DropdownMenuItem(value: 'MODERATE', child: Text(appState.translate('severity_moderate'))),
-                                  DropdownMenuItem(value: 'SEVERE', child: Text(appState.translate('severity_severe'))),
+                                  DropdownMenuItem(
+                                    value: 'MILD',
+                                    child: Text(
+                                      appState.translate('severity_mild'),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'MODERATE',
+                                    child: Text(
+                                      appState.translate('severity_moderate'),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'SEVERE',
+                                    child: Text(
+                                      appState.translate('severity_severe'),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
                                 ],
                                 onChanged: (val) {
                                   if (val != null) setState(() => _selectedSeverity = val);
@@ -535,8 +718,9 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                               const SizedBox(height: 6),
                               DropdownButtonFormField<int>(
                                 initialValue: _durationDays,
+                                isExpanded: true,
                                 decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: const BorderSide(color: Color(0xFFB8C8BD), width: 1.2),
@@ -549,7 +733,11 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
                                 items: [1, 2, 3, 4, 5, 7, 10, 14].map((d) {
                                   return DropdownMenuItem(
                                     value: d,
-                                    child: Text(appState.translate('days_unit', args: {'count': '$d'})),
+                                    child: Text(
+                                      appState.translate('days_unit', args: {'count': '$d'}),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
                                   );
                                 }).toList(),
                                 onChanged: (val) {
@@ -726,6 +914,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     TextInputAction textInputAction = TextInputAction.next,
+    Widget? suffixIcon,
     int maxLines = 1,
     void Function(String)? onChanged,
     String? errorText,
@@ -754,6 +943,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
             hintText: hint,
             hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
             prefixIcon: Icon(icon, color: hasError ? const Color(0xFFDC2626) : AppColors.forest, size: 20),
+            suffixIcon: suffixIcon,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),

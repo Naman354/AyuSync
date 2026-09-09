@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ayusync_app/core/models/patient_model.dart';
 import 'package:ayusync_app/core/models/assessment_model.dart';
 import 'package:ayusync_app/core/state/app_state.dart';
 
