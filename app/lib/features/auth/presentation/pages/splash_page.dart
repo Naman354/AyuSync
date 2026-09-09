@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -89,9 +90,16 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.splashBg,
-      body: AnimatedBuilder(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: AppColors.splashBg,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.splashBg,
+        body: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
           return Stack(
@@ -189,6 +197,7 @@ class _SplashPageState extends State<SplashPage> with SingleTickerProviderStateM
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }
