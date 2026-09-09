@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { getAuthUser } from '../lib/auth';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -275,6 +276,73 @@ const DEMO_PATIENT_DATA: Record<string, any> = {
         worker: { user: { name: 'Sunita Patil (ASHA Worker)' } }
       }
     ]
+  },
+  'pat-sunita-chavan': {
+    id: 'pat-sunita-chavan',
+    name: 'Sunita Chavan',
+    age: 29,
+    gender: 'FEMALE',
+    phone: '+91 91112 22341',
+    village: 'Khandala Ward 3, Satara Road',
+    abhaId: '91-8844-3321-0003',
+    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-sc-1', name: 'Iron Deficiency Anemia (Moderate)', status: 'ACTIVE', diagnosedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), notes: 'Hb 9.8 g/dL. Prescribed oral Iron & Folic Acid supplements.' }
+    ],
+    prescriptions: [
+      { id: 'rx-sc-1', medicine: 'Tab IFA (Iron & Folic Acid)', dosage: '1 Tab Daily', timing: 'After Meals', duration: '60 Days Supply', purpose: 'Anemia Management', status: 'ACTIVE' }
+    ],
+    encounters: [
+      {
+        id: 'enc-sc-1',
+        start: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        type: 'FIELD_VISIT',
+        provider: 'Sunita Patil (ASHA Worker)',
+        facilityName: 'Khandala Sub-Center',
+        vitals: [{ bloodPressure: '118/76', heartRate: 78, spo2: 98, temperature: '98.4' }],
+        clinicalObs: 'Routine nutritional survey. Provided counseling on green leafy vegetables & dietary iron.'
+      }
+    ],
+    referrals: [],
+    followUps: []
+  },
+  'pat-aarav-patel': {
+    id: 'pat-aarav-patel',
+    name: 'Aarav Patel',
+    age: 2,
+    gender: 'MALE',
+    phone: '+91 91112 22342',
+    village: 'Khandala East',
+    abhaId: '91-8844-3321-0004',
+    createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-ap-1', name: 'Acute Gastroenteritis (Resolved)', status: 'RESOLVED', diagnosedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), notes: 'Fully recovered following Zinc & ORS supplementation.' }
+    ],
+    prescriptions: [
+      { id: 'rx-ap-1', medicine: 'Oral Rehydration Salts (ORS) + Zinc Drops', dosage: 'As directed', timing: 'Oral', duration: 'Completed', purpose: 'Rehydration', status: 'COMPLETED' }
+    ],
+    encounters: [],
+    referrals: [],
+    followUps: []
+  },
+  'pat-meena-kumari': {
+    id: 'pat-meena-kumari',
+    name: 'Meena Kumari',
+    age: 34,
+    gender: 'FEMALE',
+    phone: '+91 91112 22343',
+    village: 'Baramati Ward 1',
+    abhaId: '91-8844-3321-0005',
+    createdAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-mk-1', name: 'Bronchial Asthma (Intermittent)', status: 'ACTIVE', diagnosedAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(), notes: 'Inhaler Salbutamol PRN for episodic wheezing in winter.' }
+    ],
+    prescriptions: [
+      { id: 'rx-mk-1', medicine: 'Salbutamol Inhaler 100mcg', dosage: '2 Puffs PRN', timing: 'When needed', duration: 'As required', purpose: 'Bronchodilation', status: 'ACTIVE' }
+    ],
+    encounters: [],
+    referrals: [],
+    followUps: []
   }
 };
 
@@ -322,8 +390,12 @@ const NEARBY_FACILITIES = [
 ];
 
 export default function PatientDashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryId = searchParams.get('id');
+  const queryTab = searchParams.get('tab');
   const user = getAuthUser() || {};
-  const targetPatientId = user.patientId || 'pat-ramesh-kulkarni';
+  const storedPatientId = typeof window !== 'undefined' ? sessionStorage.getItem('ayusync_selected_patient_id') : null;
+  const targetPatientId = queryId || user.patientId || storedPatientId || 'pat-pooja-sharma';
 
   const [patient, setPatient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -331,7 +403,18 @@ export default function PatientDashboard() {
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
   // Active Tab: 'OVERVIEW' | 'REFERRALS' | 'CONDITIONS' | 'FACILITIES' | 'TIMELINE'
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'REFERRALS' | 'CONDITIONS' | 'FACILITIES' | 'TIMELINE'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'REFERRALS' | 'CONDITIONS' | 'FACILITIES' | 'TIMELINE'>(() => {
+    if (queryTab && ['OVERVIEW', 'REFERRALS', 'CONDITIONS', 'FACILITIES', 'TIMELINE'].includes(queryTab.toUpperCase())) {
+      return queryTab.toUpperCase() as any;
+    }
+    return 'OVERVIEW';
+  });
+
+  useEffect(() => {
+    if (queryTab && ['OVERVIEW', 'REFERRALS', 'CONDITIONS', 'FACILITIES', 'TIMELINE'].includes(queryTab.toUpperCase())) {
+      setActiveTab(queryTab.toUpperCase() as any);
+    }
+  }, [queryTab]);
 
   // Modals
   const [showCondModal, setShowCondModal] = useState(false);
@@ -353,7 +436,7 @@ export default function PatientDashboard() {
       const res = await api.get(`/patients/${targetPatientId}/timeline`);
       if (res.data && res.data.id) {
         // Merge with rich fallback data ONLY if target matches a known demo patient
-        const fallback = DEMO_PATIENT_DATA[targetPatientId] || (targetPatientId === 'pat-ramesh-kulkarni' ? DEMO_PATIENT_DATA['pat-ramesh-kulkarni'] : null);
+        const fallback = DEMO_PATIENT_DATA[targetPatientId] || null;
         setPatient({
           ...(fallback || {}),
           ...res.data,
@@ -363,7 +446,7 @@ export default function PatientDashboard() {
           followUps: (res.data.followUps && res.data.followUps.length > 0) ? res.data.followUps : (fallback?.followUps || [])
         });
       } else {
-        setPatient(DEMO_PATIENT_DATA[targetPatientId] || (targetPatientId === 'pat-ramesh-kulkarni' ? DEMO_PATIENT_DATA['pat-ramesh-kulkarni'] : {
+        setPatient(DEMO_PATIENT_DATA[targetPatientId] || {
           id: targetPatientId,
           name: user.name || 'Patient',
           phone: user.phone,
@@ -371,11 +454,11 @@ export default function PatientDashboard() {
           referrals: [],
           encounters: [],
           followUps: []
-        }));
+        });
       }
     } catch {
       // Graceful offline fallback
-      setPatient(DEMO_PATIENT_DATA[targetPatientId] || (targetPatientId === 'pat-ramesh-kulkarni' ? DEMO_PATIENT_DATA['pat-ramesh-kulkarni'] : {
+      setPatient(DEMO_PATIENT_DATA[targetPatientId] || {
         id: targetPatientId,
         name: user.name || 'Patient',
         phone: user.phone,
@@ -383,7 +466,7 @@ export default function PatientDashboard() {
         referrals: [],
         encounters: [],
         followUps: []
-      }));
+      });
     } finally {
       setLoading(false);
     }
@@ -577,7 +660,7 @@ export default function PatientDashboard() {
     );
   }
 
-  const p = patient || DEMO_PATIENT_DATA['pat-ramesh-kulkarni'];
+  const p = patient || DEMO_PATIENT_DATA[targetPatientId] || DEMO_PATIENT_DATA['pat-pooja-sharma'] || DEMO_PATIENT_DATA['pat-ramesh-kulkarni'];
   const { formatted: abhaFormatted } = ensure14DigitAbha(p?.abhaId || p?.identifiers?.[0]?.value || '91-8844-3321-0001');
   const latestEncounter = p?.encounters?.[0];
   const latestVitals = latestEncounter?.vitals?.[0];
@@ -593,6 +676,19 @@ export default function PatientDashboard() {
   const encounters = p?.encounters || [];
   const prescriptions = p?.prescriptions || latestEncounter?.prescriptions || [];
 
+  // Synchronize active patient with top-right navbar profile display
+  useEffect(() => {
+    if (p?.name) {
+      window.dispatchEvent(new CustomEvent('ayusync:active_patient', {
+        detail: { id: p.id || targetPatientId, name: p.name }
+      }));
+      try {
+        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: p.id || targetPatientId, name: p.name }));
+        sessionStorage.setItem('ayusync_selected_patient_id', p.id || targetPatientId);
+      } catch {}
+    }
+  }, [p?.id, p?.name, targetPatientId]);
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-page-in">
       <InlineError message={error} onDismiss={() => setError('')} />
@@ -605,7 +701,7 @@ export default function PatientDashboard() {
       )}
 
       {/* ── 1. Top Header: Verified ABHA Identity Card & Vitals Bar ── */}
-      <div className="bg-white rounded-2xl border border-gray-200/80 p-5 sm:p-6 shadow-sm">
+      <div className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="w-14 h-14 rounded-2xl bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-bold text-xl shrink-0 shadow-inner">
@@ -613,20 +709,47 @@ export default function PatientDashboard() {
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-bold text-gray-900">{p?.name || 'Ramesh Kulkarni'}</h1>
+                <h1 className="text-xl font-bold text-gray-900">{p?.name || 'Patient'}</h1>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#1e6641] font-semibold border border-emerald-200 flex items-center gap-1">
                   <ShieldCheck size={12} /> Verified Patient Account
                 </span>
               </div>
               <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
-                <span>{p?.age ? `${p.age} yrs` : '58 yrs'}</span>
-                <span>·</span><span>{p?.gender || 'MALE'}</span>
-                <span>·</span><span>{p?.village || p?.address || 'Khandala Ward 2, Satara Road'}</span>
-                <span>·</span><span>{p?.phone || '+91 91112 22333'}</span>
+                <span>{p?.age ? `${p.age} yrs` : '--'}</span>
+                <span>·</span><span>{p?.gender || '--'}</span>
+                <span>·</span><span>{p?.village || p?.address || 'Baramati Rural'}</span>
+                <span>·</span><span>{p?.phone || '--'}</span>
               </div>
               <div className="text-xs text-gray-600 font-mono mt-1.5 flex items-center gap-1.5">
                 <span className="text-gray-400 font-sans font-medium">ABHA Health ID:</span>
                 <strong className="text-gray-900 font-bold bg-gray-100 px-2.5 py-0.5 rounded-md text-xs tracking-wider border border-gray-200">{abhaFormatted}</strong>
+              </div>
+
+              {/* Quick Patient Switcher */}
+              <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                <span className="text-[11px] text-gray-400 font-medium">Switch Patient:</span>
+                {[
+                  { id: 'pat-pooja-sharma', label: 'Pooja Sharma' },
+                  { id: 'pat-ramesh-kulkarni', label: 'Ramesh Kulkarni' },
+                  { id: 'pat-sunita-chavan', label: 'Sunita Chavan' },
+                  { id: 'pat-aarav-patel', label: 'Aarav Patel' },
+                  { id: 'pat-meena-kumari', label: 'Meena Kumari' },
+                ].map(pt => (
+                  <button
+                    key={pt.id}
+                    type="button"
+                    onClick={() => {
+                      setSearchParams({ id: pt.id, tab: activeTab });
+                    }}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+                      targetPatientId === pt.id
+                        ? 'bg-[#1e6641] text-white shadow-xs'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {pt.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -642,14 +765,14 @@ export default function PatientDashboard() {
         </div>
 
         {/* Vitals Summary Strip (Responsive Grid) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-5 mt-5 border-t border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-5 mt-5 border-t border-gray-100">
           <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-gray-500">Blood Pressure</span>
               <HeartPulse size={14} className="text-rose-500" />
             </div>
             <div className="text-sm font-bold text-gray-900 mt-1">
-              {latestVitals?.bloodPressure || latestVitals?.blood_pressure || '136/86 mmHg'}
+              {latestVitals?.bloodPressure || latestVitals?.blood_pressure || (p?.id === 'pat-ramesh-kulkarni' ? '136/86 mmHg' : '--')}
             </div>
             <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">✓ Target Controlled</div>
           </div>
@@ -660,7 +783,7 @@ export default function PatientDashboard() {
               <Activity size={14} className="text-amber-500" />
             </div>
             <div className="text-sm font-bold text-gray-900 mt-1">
-              {latestVitals?.bloodGlucose ? `${latestVitals.bloodGlucose} mg/dL` : '128 mg/dL'}
+              {latestVitals?.bloodGlucose ? `${latestVitals.bloodGlucose} mg/dL` : (p?.id === 'pat-ramesh-kulkarni' ? '128 mg/dL' : '--')}
             </div>
             <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">✓ Within Fasting Goal</div>
           </div>
@@ -671,7 +794,7 @@ export default function PatientDashboard() {
               <Clock size={14} className="text-blue-500" />
             </div>
             <div className="text-sm font-bold text-gray-900 mt-1">
-              {latestVitals?.heartRate ? `${latestVitals.heartRate} bpm` : '74 bpm'}
+              {latestVitals?.heartRate ? `${latestVitals.heartRate} bpm` : (p?.id === 'pat-ramesh-kulkarni' ? '74 bpm' : '--')}
             </div>
             <div className="text-[10px] text-gray-400 mt-0.5">Resting Normal</div>
           </div>
@@ -682,7 +805,7 @@ export default function PatientDashboard() {
               <ShieldCheck size={14} className="text-[#1e6641]" />
             </div>
             <div className="text-sm font-bold text-[#1e6641] mt-1">
-              {latestVitals?.spo2 ? `${latestVitals.spo2}%` : '98%'}
+              {latestVitals?.spo2 ? `${latestVitals.spo2}%` : (p?.id === 'pat-ramesh-kulkarni' ? '98%' : '--')}
             </div>
             <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">Optimal SpO2</div>
           </div>
@@ -701,19 +824,27 @@ export default function PatientDashboard() {
       </div>
 
       {/* ── 2. Health Care Plan Summary Banner ── */}
-      <div className="bg-gradient-to-r from-[#14472c] via-[#1e6641] to-[#287950] rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-[#14472c] via-[#1e6641] to-[#287950] rounded-2xl p-4 sm:p-5 text-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5 max-w-xl">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-100 text-[10px] font-bold uppercase tracking-wide border border-emerald-400/30 flex items-center gap-1">
               <Sparkles size={11} /> Active Care Plan
             </span>
-            <span className="text-xs text-emerald-200">Supervised by Dr. Rajesh Deshmukh (Baramati CHC)</span>
+            <span className="text-xs text-emerald-200">
+              {latestEncounter?.provider ? `Supervised by ${latestEncounter.provider}` : 'Supervised by Baramati CHC Clinical Team'}
+            </span>
           </div>
           <h2 className="text-base font-bold text-white leading-snug">
-            Stabilized on Chronic Antihypertensive & Oral Glycemic Protocol
+            {primaryReferral?.counterReferral?.outcome || (activeConditions[0] ? `Care Protocol for ${activeConditions[0].name}` : 'Comprehensive Community Health & Wellness Plan')}
           </h2>
           <p className="text-xs text-emerald-100/90 leading-relaxed">
-            Daily Regimen: <strong className="text-white font-semibold">Tab Metformin 500mg BD</strong> (after meals) + <strong className="text-white font-semibold">Tab Telmisartan 40mg OD</strong> (morning). Target fasting glucose &lt; 130 mg/dL.
+            {primaryReferral?.counterReferral?.treatment
+              ? `Prescribed Regimen: ${primaryReferral.counterReferral.treatment}`
+              : primaryReferral?.counterReferral?.instructions
+              ? primaryReferral.counterReferral.instructions
+              : activeConditions[0]?.notes
+              ? activeConditions[0].notes
+              : 'Routine screening, balanced nutrition, and regular community follow-up with frontline health workers.'}
           </p>
         </div>
 
@@ -722,11 +853,12 @@ export default function PatientDashboard() {
             <div className="text-[10px] text-emerald-200 uppercase font-semibold">Next Scheduled Action</div>
             <div className="text-xs font-bold text-white flex items-center gap-1.5 mt-0.5">
               <Calendar size={13} className="text-emerald-300" />
-              ASHA Home Visit · Tomorrow
+              {pendingFollowUps[0] ? `ASHA Visit · Due ${safeFormatDate(pendingFollowUps[0].dueDate)}` : 'ASHA Home Visit · Scheduled'}
             </div>
           </div>
         </div>
       </div>
+
 
       {/* ── 3. Tab Switcher Bar ── */}
       <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto scrollbar-none pt-1">
@@ -1591,10 +1723,10 @@ export default function PatientDashboard() {
                     Patient Demographics & ABDM Identity
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-2 gap-x-4 text-xs">
-                    <div><span className="text-gray-500">Name:</span> <strong className="text-gray-900">{p?.name || 'Ramesh Kulkarni'}</strong></div>
-                    <div><span className="text-gray-500">Age / Gender:</span> <strong>{p?.age || '58'} yrs / {p?.gender || 'MALE'}</strong></div>
-                    <div><span className="text-gray-500">Contact:</span> <strong>{p?.phone || '+91 91112 22333'}</strong></div>
-                    <div><span className="text-gray-500">Village / Address:</span> <strong>{p?.village || 'Khandala Ward 2, Satara Road'}</strong></div>
+                    <div><span className="text-gray-500">Name:</span> <strong className="text-gray-900">{p?.name || 'Patient'}</strong></div>
+                    <div><span className="text-gray-500">Age / Gender:</span> <strong>{p?.age ? `${p.age} yrs` : '--'} / {p?.gender || '--'}</strong></div>
+                    <div><span className="text-gray-500">Contact:</span> <strong>{p?.phone || '--'}</strong></div>
+                    <div><span className="text-gray-500">Village / Address:</span> <strong>{p?.village || p?.address || 'Baramati Rural'}</strong></div>
                     <div className="col-span-2">
                       <span className="text-gray-500">14-Digit ABHA ID:</span>{' '}
                       <strong className="font-mono bg-gray-100 px-2 py-0.5 rounded border border-gray-300">{abhaFormatted}</strong>

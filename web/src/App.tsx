@@ -47,6 +47,15 @@ function NavLink({ to, exact, children }: { to: string; exact?: boolean; childre
   );
 }
 
+// ─── Known Demo Patient Lookup for Instant Zero-Latency Navigation ───────────
+const KNOWN_DEMO_PATIENTS: Record<string, string> = {
+  'pat-pooja-sharma': 'Pooja Sharma',
+  'pat-ramesh-kulkarni': 'Ramesh Kulkarni',
+  'pat-sunita-chavan': 'Sunita Chavan',
+  'pat-aarav-patel': 'Aarav Patel',
+  'pat-meena-kumari': 'Meena Kumari',
+};
+
 // ─── Protected shell ─────────────────────────────────────────────────────────
 const ProtectedRoute = () => {
   const token = getAuthToken();
@@ -55,34 +64,100 @@ const ProtectedRoute = () => {
   const { isOffline, toggleOffline } = useNetworkStatus();
 
   const [user, setUser] = useState<any>(() => getAuthUser() || {});
+  const [activePatient, setActivePatient] = useState<{ id?: string; name?: string } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem('ayusync_active_patient');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // Automatically derive active role from current URL path or stored user
+  // Listen to active patient changes dispatched from PatientProfile or PatientDashboard
+  useEffect(() => {
+    const onActivePatient = (e: any) => {
+      if (e.detail && e.detail.name) {
+        setActivePatient(e.detail);
+        try {
+          sessionStorage.setItem('ayusync_active_patient', JSON.stringify(e.detail));
+          if (e.detail.id) sessionStorage.setItem('ayusync_selected_patient_id', e.detail.id);
+        } catch {}
+      } else if (e.detail === null) {
+        setActivePatient(null);
+        try {
+          sessionStorage.removeItem('ayusync_active_patient');
+        } catch {}
+      }
+    };
+    window.addEventListener('ayusync:active_patient', onActivePatient);
+    return () => window.removeEventListener('ayusync:active_patient', onActivePatient);
+  }, []);
+
+  // Listen to auth user state updates (e.g. role switch)
+  useEffect(() => {
+    const onAuthUpdate = () => {
+      setUser(getAuthUser() || {});
+    };
+    window.addEventListener('storage', onAuthUpdate);
+    window.addEventListener('ayusync:user_updated', onAuthUpdate);
+    return () => {
+      window.removeEventListener('storage', onAuthUpdate);
+      window.removeEventListener('ayusync:user_updated', onAuthUpdate);
+    };
+  }, []);
+
+  const isPatientPortalPath = location.pathname === '/patient' || location.pathname.startsWith('/patient/') || location.pathname.startsWith('/patient?');
+  const isPatientProfilePath = location.pathname.startsWith('/patients/');
+
+  // Strictly derive role without mutating sessionStorage on route navigation
   const getRoleFromPath = (path: string): string => {
     if (path.startsWith('/worker') || path.startsWith('/intake') || path.startsWith('/followups')) return 'WORKER';
-    if (path.startsWith('/patient')) return 'PATIENT';
     if (path.startsWith('/dashboard') || path.startsWith('/queue') || path.startsWith('/facilities')) return 'DOCTOR';
+    if (isPatientPortalPath) {
+      return user?.role === 'PATIENT' ? 'PATIENT' : (user?.role || 'PATIENT');
+    }
+    // On /patients or /patients/:id or other routes: maintain current user role
     return user?.role || 'DOCTOR';
   };
 
   const currentRole = getRoleFromPath(location.pathname);
+  const isWorker = currentRole === 'WORKER';
+  const isPatient = currentRole === 'PATIENT';
+  const isDoctor = !isWorker && !isPatient;
 
-  // Synchronize user state when role/route changes (in this tab only)
-  useEffect(() => {
-    try {
-      const stored = getAuthUser() || {};
-      if (stored.role !== currentRole && !location.pathname.startsWith('/patients')) {
-        let name = stored.name;
-        if (currentRole === 'DOCTOR') name = 'Dr. Rajesh Deshmukh';
-        else if (currentRole === 'WORKER') name = 'Sunita Patil';
-        else if (currentRole === 'PATIENT') name = 'Ramesh Kulkarni';
+  // Dynamic top-right profile name and initial:
+  // When a patient profile (/patients/:id) or portal (/patient) is open, dynamically reflect that patient!
+  let displayName = '';
+  let isDisplayingPatient = false;
 
-        const updated = updateAuthUser({ role: currentRole, name });
-        setUser(updated);
-      } else {
-        setUser(stored);
-      }
-    } catch {}
-  }, [location.pathname, currentRole]);
+  if (isPatientProfilePath) {
+    const routePatientId = location.pathname.replace('/patients/', '').split('/')[0];
+    const resolvedName = (activePatient?.id === routePatientId && activePatient?.name) || KNOWN_DEMO_PATIENTS[routePatientId] || activePatient?.name;
+    displayName = resolvedName || 'Patient Profile';
+    isDisplayingPatient = true;
+  } else if (isPatientPortalPath) {
+    const searchParams = new URLSearchParams(location.search);
+    const queryId = searchParams.get('id');
+    const targetId = queryId || activePatient?.id || user.patientId;
+    const resolvedName = (targetId && KNOWN_DEMO_PATIENTS[targetId]) || activePatient?.name || (user.role === 'PATIENT' && user.name ? user.name : 'Pooja Sharma');
+    displayName = resolvedName;
+    isDisplayingPatient = true;
+  } else {
+    // Standard role-based name for Doctor / Worker / Patient
+    if (isDoctor) {
+      displayName = (user.name && (user.name.startsWith('Dr') || user.name.includes('Deshmukh') || user.name.includes('Joshi')))
+        ? user.name
+        : 'Dr. Rajesh Deshmukh';
+    } else if (isWorker) {
+      displayName = (user.name && !user.name.includes('Dr')) ? user.name : 'Sunita Patil';
+    } else {
+      displayName = user.name || activePatient?.name || 'Pooja Sharma';
+    }
+  }
+
+  // Determine active patient portal link target (defaults to Pooja Sharma if no specific patient selected)
+  const activePortalPatientId = activePatient?.id || user.patientId || (typeof window !== 'undefined' ? sessionStorage.getItem('ayusync_selected_patient_id') : null) || 'pat-pooja-sharma';
+  const patientPortalUrl = `/patient?id=${activePortalPatientId}`;
 
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
@@ -109,23 +184,24 @@ const ProtectedRoute = () => {
 
   if (!token) return <Navigate to="/login" replace />;
 
-  const isWorker = currentRole === 'WORKER';
-  const isPatient = currentRole === 'PATIENT';
-
   const switchRole = () => {
     let newRole = 'DOCTOR';
     let newName = 'Dr. Rajesh Deshmukh';
     let targetPath = '/dashboard';
     let patientId = user.patientId;
+
     if (currentRole === 'DOCTOR') {
       newRole = 'WORKER';
       newName = 'Sunita Patil';
       targetPath = '/worker';
     } else if (currentRole === 'WORKER') {
       newRole = 'PATIENT';
-      newName = 'Ramesh Kulkarni';
-      patientId = patientId || 'pat-ramesh-kulkarni';
-      targetPath = '/patient';
+      // Use active or stored patient ID if available, not defaulting to Ramesh Kulkarni
+      const activeId = activePatient?.id || sessionStorage.getItem('ayusync_selected_patient_id') || 'pat-pooja-sharma';
+      const activeName = (activeId && KNOWN_DEMO_PATIENTS[activeId]) || activePatient?.name || 'Pooja Sharma';
+      newName = activeName;
+      patientId = activeId;
+      targetPath = `/patient?id=${activeId}`;
     } else {
       newRole = 'DOCTOR';
       newName = 'Dr. Rajesh Deshmukh';
@@ -134,34 +210,28 @@ const ProtectedRoute = () => {
 
     const updated = updateAuthUser({ role: newRole, name: newName, patientId });
     setUser(updated);
-    navigate(targetPath, { replace: true });
+    window.dispatchEvent(new CustomEvent('ayusync:user_updated', { detail: updated }));
+    navigate(targetPath);
   };
-
-  const isDoctor = !isWorker && !isPatient;
-  const displayName = isDoctor
-    ? (user.name && (user.name.startsWith('Dr') || user.name.includes('Deshmukh') || user.name.includes('Joshi')) ? user.name : 'Dr. Rajesh Deshmukh')
-    : isWorker
-    ? (user.name && !user.name.includes('Dr') ? user.name : 'Sunita Patil')
-    : (user.name && !user.name.includes('Dr') ? user.name : 'Ramesh Kulkarni');
 
   return (
     <div className="min-h-screen bg-[#f8f7f3] font-sans text-gray-900">
       {/* ── Top navigation bar ── */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-xs">
-        <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-4 sm:px-6 gap-4">
+        <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-3 sm:px-6 gap-2 sm:gap-4">
 
           {/* Brand */}
-          <Link to={isWorker ? '/worker' : isPatient ? '/patient' : '/dashboard'} className="flex items-center gap-2 shrink-0 group">
+          <Link to={isWorker ? '/worker' : isPatient ? patientPortalUrl : '/dashboard'} className="flex items-center gap-2 shrink-0 group">
             <div className="w-8 h-8 rounded-lg bg-[#1e6641] text-white flex items-center justify-center group-hover:opacity-90 transition-opacity">
               <HeartPulse size={18} strokeWidth={2} />
             </div>
-            <div className="hidden sm:block">
+            <div>
               <div className="text-sm font-bold text-gray-900 leading-tight">SwasthyaSetu</div>
-              <div className="text-[10px] text-gray-400 leading-tight">AyuSync · Baramati CHC</div>
+              <div className="hidden sm:block text-[10px] text-gray-400 leading-tight">AyuSync · Baramati CHC</div>
             </div>
           </Link>
 
-          {/* Role-aware navigation */}
+          {/* Role-aware desktop navigation */}
           <nav className="hidden md:flex items-center gap-1 flex-1 ml-6">
             {isWorker ? (
               <>
@@ -171,7 +241,8 @@ const ProtectedRoute = () => {
               </>
             ) : isPatient ? (
               <>
-                <NavLink to="/patient" exact><Users size={15} />My Health Portal</NavLink>
+                <NavLink to={patientPortalUrl} exact><Users size={15} />My Health Portal</NavLink>
+                <NavLink to="/patients"><Building2 size={15} />Patient Directory</NavLink>
               </>
             ) : (
               <>
@@ -184,13 +255,13 @@ const ProtectedRoute = () => {
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Live Realistic Offline/Online Simulation Toggle */}
             <button
               type="button"
               onClick={toggleOffline}
               title={isOffline ? 'Click to restore Online mode (auto-flushes local queue)' : 'Click to simulate Offline mode'}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold shadow-xs transition-all cursor-pointer ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full border text-[11px] sm:text-xs font-semibold shadow-xs transition-all cursor-pointer ${
                 isOffline
                   ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
                   : 'bg-emerald-50 border-emerald-200 text-[#1e6641] hover:bg-emerald-100'
@@ -199,12 +270,12 @@ const ProtectedRoute = () => {
               {isOffline ? (
                 <>
                   <WifiOff size={12} className="text-amber-600 animate-pulse shrink-0" />
-                  <span>Offline (Simulated)</span>
+                  <span className="hidden xs:inline sm:inline">Offline</span>
                 </>
               ) : (
                 <>
                   <Wifi size={12} className="text-[#1e6641] shrink-0" />
-                  <span>Online</span>
+                  <span className="hidden xs:inline sm:inline">Online</span>
                 </>
               )}
             </button>
@@ -213,7 +284,7 @@ const ProtectedRoute = () => {
             <button
               onClick={switchRole}
               title="Click to switch role (Doctor / ASHA Health Worker / Patient)"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs text-gray-700 shadow-xs transition-all hover:border-[#1e6641]/50 cursor-pointer"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-[11px] sm:text-xs text-gray-700 shadow-xs transition-all hover:border-[#1e6641]/50 cursor-pointer"
             >
               <span className="font-semibold text-[#1e6641] flex items-center gap-1">
                 {isWorker ? '👩‍⚕️ ASHA' : isPatient ? '🧑 Patient' : '👨‍⚕️ Doctor'}
@@ -232,12 +303,17 @@ const ProtectedRoute = () => {
               </Link>
             )}
 
-            {/* Avatar + name */}
-            <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-gray-200">
-              <div className="w-7 h-7 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-bold text-xs">
-                {displayName.charAt(0)}
+            {/* Dynamic Avatar + Active Name (Mobile & Desktop) */}
+            <div
+              className="flex items-center gap-1.5 sm:gap-2 pl-1.5 sm:pl-2 border-l border-gray-200"
+              title={isDisplayingPatient ? `Active Patient: ${displayName}` : displayName}
+            >
+              <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center font-bold text-[11px] sm:text-xs shrink-0 shadow-xs ${
+                isDisplayingPatient ? 'bg-purple-100 text-purple-800 ring-1 ring-purple-300' : 'bg-[#e4efe7] text-[#1e6641]'
+              }`}>
+                {displayName.charAt(0) || 'P'}
               </div>
-              <div className="text-xs font-semibold text-gray-800 leading-tight">
+              <div className="hidden sm:block text-xs font-semibold text-gray-800 leading-tight truncate max-w-[120px] md:max-w-[160px]">
                 {displayName}
               </div>
             </div>
@@ -248,9 +324,9 @@ const ProtectedRoute = () => {
                 navigate('/login');
               }}
               title="Sign out of this tab"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              className="p-1 sm:p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
-              <LogOut size={16} />
+              <LogOut size={15} />
             </button>
           </div>
         </div>
@@ -261,7 +337,7 @@ const ProtectedRoute = () => {
             <div className="max-w-7xl mx-auto flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <WifiOff size={13} className="shrink-0 animate-pulse" />
-                <span><strong>Simulated Offline Mode:</strong> Records & intakes will be stored in local SQLite/IndexedDB queue and synced automatically on reconnection.</span>
+                <span className="text-[11px] sm:text-xs"><strong>Simulated Offline Mode:</strong> Records & intakes will be stored in local SQLite/IndexedDB queue and synced automatically on reconnection.</span>
               </div>
               <button
                 type="button"
@@ -282,15 +358,15 @@ const ProtectedRoute = () => {
       </header>
 
       {/* ── Page content ── */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 pb-20 md:pb-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-20 md:pb-6">
         <Outlet />
       </main>
 
       {/* ── Mobile bottom navigation bar ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 flex items-center justify-around py-2 px-2 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around py-2 px-2 shadow-lg">
         {isWorker ? (
           <>
-            <Link to="/worker" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+            <Link to="/worker" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname === '/worker' ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <LayoutDashboard size={18} />
               <span>Tasks</span>
             </Link>
@@ -300,37 +376,49 @@ const ProtectedRoute = () => {
               </div>
               <span>Intake</span>
             </Link>
-            <Link to="/followups" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+            <Link to="/followups" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname.startsWith('/followups') ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <AlertTriangle size={18} />
               <span>Alerts</span>
             </Link>
-            <Link to="/patients" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+            <Link to="/patients" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname.startsWith('/patients') ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <Users size={18} />
               <span>Patients</span>
             </Link>
           </>
         ) : isPatient ? (
           <>
-            <Link to="/patient" className="flex flex-col items-center text-[10px] font-medium text-[#1e6641]">
+            <Link to={patientPortalUrl} className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname === '/patient' && (!location.search || location.search.includes('tab=OVERVIEW') || !location.search.includes('tab=')) ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <Users size={18} />
-              <span>My Portal</span>
+              <span>Portal</span>
+            </Link>
+            <Link to={`${patientPortalUrl}${patientPortalUrl.includes('?') ? '&' : '?'}tab=REFERRALS`} className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.search.includes('tab=REFERRALS') ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
+              <HeartPulse size={18} />
+              <span>Care Plans</span>
+            </Link>
+            <Link to={`${patientPortalUrl}${patientPortalUrl.includes('?') ? '&' : '?'}tab=CONDITIONS`} className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.search.includes('tab=CONDITIONS') ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
+              <Clock size={18} />
+              <span>Conditions</span>
+            </Link>
+            <Link to="/patients" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname.startsWith('/patients') ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
+              <Building2 size={18} />
+              <span>Directory</span>
             </Link>
           </>
         ) : (
           <>
-            <Link to="/dashboard" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+            <Link to="/dashboard" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname === '/dashboard' ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <LayoutDashboard size={18} />
               <span>Home</span>
             </Link>
-            <Link to="/queue" className="flex flex-col items-center text-[10px] font-medium text-[#1e6641]">
+            <Link to="/queue" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname === '/queue' ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <Clock size={18} />
               <span>Queue</span>
             </Link>
-            <Link to="/facilities" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+            <Link to="/facilities" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname === '/facilities' ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <Building2 size={18} />
               <span>Clinic</span>
             </Link>
-            <Link to="/patients" className="flex flex-col items-center text-[10px] font-medium text-gray-600 hover:text-[#1e6641]">
+            <Link to="/patients" className={`flex flex-col items-center text-[10px] font-medium transition-colors ${location.pathname.startsWith('/patients') ? 'text-[#1e6641]' : 'text-gray-600 hover:text-[#1e6641]'}`}>
               <Users size={18} />
               <span>Patients</span>
             </Link>
@@ -338,7 +426,6 @@ const ProtectedRoute = () => {
         )}
       </nav>
     </div>
-
   );
 };
 
@@ -350,31 +437,19 @@ function RootRedirect() {
 }
 
 function DoctorRouteGuard({ children }: { children: React.ReactNode }) {
-  const user = getAuthUser() || {};
-  if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
-  if (user.role === 'WORKER') return <Navigate to="/worker" replace />;
+  // Allow seamless navigation across portal sections without bounce redirects
   return <>{children}</>;
 }
 
 function WorkerRouteGuard({ children }: { children: React.ReactNode }) {
-  const user = getAuthUser() || {};
-  if (user.role === 'PATIENT') return <Navigate to="/patient" replace />;
   return <>{children}</>;
 }
 
 function PatientsRouteGuard() {
-  const user = getAuthUser() || {};
-  if (user.role === 'PATIENT') {
-    return <Navigate to="/patient" replace />;
-  }
   return <Patients />;
 }
 
 function PatientProfileGuard() {
-  const user = getAuthUser() || {};
-  if (user.role === 'PATIENT') {
-    return <Navigate to="/patient" replace />;
-  }
   return <PatientProfile />;
 }
 
@@ -416,3 +491,4 @@ export default function App() {
     </>
   );
 }
+
