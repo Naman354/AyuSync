@@ -12,6 +12,139 @@ import {
   ShieldCheck, Building2, Sparkles, Ambulance, Info
 } from 'lucide-react';
 
+const DEMO_PATIENT_PROFILES: Record<string, any> = {
+  'pat-ramesh-kulkarni': {
+    id: 'pat-ramesh-kulkarni',
+    name: 'Ramesh Kulkarni',
+    age: 58,
+    gender: 'MALE',
+    phone: '+91 91112 22333',
+    village: 'Khandala Ward 2, Satara Road',
+    abhaId: '91-8844-3321-0001',
+    createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-1', name: 'Essential Hypertension (Grade 1)', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Target BP < 130/80 mmHg' },
+      { id: 'c-2', name: 'Type 2 Diabetes Mellitus', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Controlled on Metformin' }
+    ],
+    encounters: [
+      {
+        id: 'enc-1',
+        start: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+        type: 'CLINIC_VISIT',
+        provider: 'Dr. Rajesh Deshmukh',
+        facilityName: 'Baramati Community Health Centre',
+        vitals: [{ bloodPressure: '136/86', heartRate: 74, spo2: 98, temperature: '98.4', bloodGlucose: '128' }]
+      }
+    ],
+    referrals: [
+      {
+        id: 'ref-ramesh-kulkarni',
+        urgency: 'PRIORITY',
+        status: 'COUNTER_REFERRED',
+        reason: 'Uncontrolled Type 2 Diabetes with Essential Hypertension',
+        origin: { name: 'Khandala Sub-Center' },
+        destination: { name: 'Baramati CHC' },
+        createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        counterReferral: {
+          outcome: 'Stabilized on oral glycemic & antihypertensive regimen',
+          treatment: 'Tab Metformin 500mg BD, Tab Telmisartan 40mg OD',
+          instructions: 'Low salt diet, regular fasting sugar monitoring'
+        }
+      }
+    ],
+    followUps: []
+  },
+  'pat-pooja-sharma': {
+    id: 'pat-pooja-sharma',
+    name: 'Pooja Sharma',
+    age: 26,
+    gender: 'FEMALE',
+    phone: '+91 91112 22334',
+    village: 'Baramati Rural, Pune',
+    abhaId: '91-8844-3321-0002',
+    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-p1', name: 'Gestational Hypertension (28 Weeks)', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'BP elevated at ANC visit (142/94 mmHg)' },
+      { id: 'c-p2', name: 'Mild Anemia (Hb 10.2 g/dL)', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Prescribed Iron & Folic Acid supplements' }
+    ],
+    encounters: [
+      {
+        id: 'enc-p1',
+        start: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        type: 'CLINIC_VISIT',
+        provider: 'Dr. Priya Kulkarni',
+        facilityName: 'Baramati Community Health Centre',
+        vitals: [{ bloodPressure: '132/86', heartRate: 82, spo2: 98, temperature: '98.6' }]
+      }
+    ],
+    referrals: [
+      {
+        id: 'ref-pooja-sharma',
+        urgency: 'URGENT',
+        status: 'COUNTER_REFERRED',
+        reason: 'Gestational Hypertension screening; elevated blood pressure requiring physician review',
+        origin: { name: 'Khandala Sub-Center' },
+        destination: { name: 'Baramati CHC' },
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        counterReferral: {
+          outcome: 'Stabilized on oral antihypertensives (Labetalol 100mg BD)',
+          treatment: 'Tab Labetalol 100mg BD, IFA 1 OD, Calcium 500mg OD',
+          instructions: 'Visit patient every Tuesday and Friday. Check BP and record in AyuSync app.'
+        }
+      }
+    ],
+    followUps: []
+  },
+  'pat-sunita-chavan': {
+    id: 'pat-sunita-chavan',
+    name: 'Sunita Chavan',
+    age: 29,
+    gender: 'FEMALE',
+    phone: '+91 91112 22341',
+    village: 'Khandala Ward 3',
+    abhaId: '91-8844-3321-0003',
+    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-sc1', name: 'Iron Deficiency Anemia', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Hb 9.8 g/dL' }
+    ],
+    encounters: [],
+    referrals: [],
+    followUps: []
+  },
+  'pat-aarav-patel': {
+    id: 'pat-aarav-patel',
+    name: 'Aarav Patel',
+    age: 2,
+    gender: 'MALE',
+    phone: '+91 91112 22342',
+    village: 'Khandala East',
+    abhaId: '91-8844-3321-0004',
+    createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-ap1', name: 'Acute Gastroenteritis (Resolved)', status: 'RESOLVED', diagnosedAt: new Date().toISOString(), notes: 'Treated with ORS and Zinc' }
+    ],
+    encounters: [],
+    referrals: [],
+    followUps: []
+  },
+  'pat-meena-kumari': {
+    id: 'pat-meena-kumari',
+    name: 'Meena Kumari',
+    age: 34,
+    gender: 'FEMALE',
+    phone: '+91 91112 22343',
+    village: 'Baramati Ward 1',
+    abhaId: '91-8844-3321-0005',
+    createdAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
+    conditions: [
+      { id: 'c-mk1', name: 'Bronchial Asthma (Intermittent)', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Salbutamol MDI PRN' }
+    ],
+    encounters: [],
+    referrals: [],
+    followUps: []
+  }
+};
+
 export default function PatientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -66,53 +199,22 @@ export default function PatientProfile() {
   const fetchPatient = async () => {
     try {
       setLoading(true);
+      setError('');
       const r = await api.get(`/patients/${id}/timeline`);
-      setPatient(r.data);
-    } catch (e: any) {
-      if (id === 'pat-ramesh-kulkarni' || id?.includes('ramesh')) {
-        setPatient({
-          id: 'pat-ramesh-kulkarni',
-          name: 'Ramesh Kulkarni',
-          age: 58,
-          gender: 'MALE',
-          phone: '+91 91112 22333',
-          village: 'Khandala Ward 2, Satara Road',
-          abhaId: '91-8844-3321-0001',
-          createdAt: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString(),
-          conditions: [
-            { id: 'c-1', name: 'Essential Hypertension (Grade 1)', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Target BP < 130/80 mmHg' },
-            { id: 'c-2', name: 'Type 2 Diabetes Mellitus', status: 'ACTIVE', diagnosedAt: new Date().toISOString(), notes: 'Controlled on Metformin' }
-          ],
-          encounters: [
-            {
-              id: 'enc-1',
-              start: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-              type: 'CLINIC_VISIT',
-              provider: 'Dr. Rajesh Deshmukh',
-              facilityName: 'Baramati Community Health Centre',
-              vitals: [{ bloodPressure: '136/86', heartRate: 74, spo2: 98, temperature: '98.4', bloodGlucose: '128' }]
-            }
-          ],
-          referrals: [
-            {
-              id: 'ref-ramesh-kulkarni',
-              urgency: 'PRIORITY',
-              status: 'COUNTER_REFERRED',
-              reason: 'Uncontrolled Type 2 Diabetes with Essential Hypertension',
-              origin: { name: 'Khandala Sub-Center' },
-              destination: { name: 'Baramati CHC' },
-              createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-              counterReferral: {
-                outcome: 'Stabilized on oral glycemic & antihypertensive regimen',
-                treatment: 'Tab Metformin 500mg BD, Tab Telmisartan 40mg OD',
-                instructions: 'Low salt diet, regular fasting sugar monitoring'
-              }
-            }
-          ],
-          followUps: []
-        });
+      if (r.data) {
+        setPatient(r.data);
       } else {
-        setError(e.response?.data?.error || 'Could not load this patient profile.');
+        const fallback = DEMO_PATIENT_PROFILES[id || ''] || null;
+        if (fallback) setPatient(fallback);
+        else setError('Patient record not found.');
+      }
+    } catch (e: any) {
+      const fallback = DEMO_PATIENT_PROFILES[id || ''] || null;
+      if (fallback) {
+        setPatient(fallback);
+      } else {
+        const errMsg = e.response?.data?.message || e.response?.data?.error || 'Could not load this patient profile.';
+        setError(errMsg);
       }
     } finally {
       setLoading(false);

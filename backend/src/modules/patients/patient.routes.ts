@@ -11,6 +11,7 @@ router.use(authenticate);
 // Routes
 router.post('/', requirePermission('patient.create'), createPatient);
 router.get('/search', requirePermission('patient.read'), searchPatients);
+router.get('/:id', requirePermission('patient.read'), getPatientTimeline);
 router.get('/:id/timeline', requirePermission('patient.read'), getPatientTimeline);
 router.post('/:id/conditions', addCondition);
 

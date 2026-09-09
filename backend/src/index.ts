@@ -8,8 +8,7 @@ import { PrismaClient } from '@prisma/client';
 // Load environment variables (from .env file)
 dotenv.config();
 
-// Initialize Prisma Client
-const prisma = new PrismaClient();
+import { prisma } from './lib/prisma';
 
 // Initialize Express App
 const app = express();
@@ -107,9 +106,11 @@ app.get('/health', async (req, res) => {
 
 // Start the server
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
-  console.log(`AyuSync Backend is running on http://localhost:${PORT}`);
-  startJobs();
-});
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, () => {
+    console.log(`AyuSync Backend is running on http://localhost:${PORT}`);
+    startJobs();
+  });
+}
 
 export { app, prisma, io };

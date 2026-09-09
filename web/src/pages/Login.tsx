@@ -157,7 +157,7 @@ export default function Login() {
                 onClick={() => setShowAllDemo(!showAllDemo)}
                 className="text-xs text-[#1e6641] hover:underline font-medium flex items-center gap-1"
               >
-                <span>{showAllDemo ? 'Hide all accounts' : 'View all 8 accounts'}</span>
+                <span>{showAllDemo ? 'Hide all accounts' : 'View all 10 accounts'}</span>
                 {showAllDemo ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
             </div>
@@ -253,6 +253,8 @@ export default function Login() {
                     { role: 'ANM Nurse', name: 'Kavita More (Baramati)', phone: '+919998887778' },
                     { role: 'Patient', name: 'Ramesh Kulkarni (Hypertension)', phone: '+919111222333' },
                     { role: 'Patient', name: 'Pooja Sharma (Maternal Care)', phone: '+919111222334' },
+                    { role: 'Patient', name: 'Dilip Thorat (Diabetic Check)', phone: '+919111222338' },
+                    { role: 'Patient', name: 'Sunita Chavan (Anemia Follow-up)', phone: '+919111222341' },
                   ].map(acc => (
                     <li key={acc.phone} className="pt-1.5 flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -273,8 +275,11 @@ export default function Login() {
                     </li>
                   ))}
                 </ul>
-                <div className="pt-2 text-[10px] text-gray-400 border-t border-gray-100 text-center">
-                  Universal demo password: <span className="font-mono font-semibold text-gray-600">password123</span>
+                <div className="pt-2 text-[10px] text-gray-500 border-t border-gray-100 text-center leading-relaxed">
+                  Universal demo password: <span className="font-mono font-semibold text-gray-700">password123</span>
+                  <div className="text-[10px] text-emerald-700 mt-0.5">
+                    ✨ Any 10-digit mobile number can log in as a citizen / patient.
+                  </div>
                 </div>
               </div>
             )}

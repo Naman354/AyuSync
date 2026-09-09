@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../index';
+import { prisma } from '../../lib/prisma';
 
 let cachedFacilities: any = null;
 let facilitiesCacheTimestamp = 0;

@@ -352,22 +352,38 @@ export default function PatientDashboard() {
       setLoading(true);
       const res = await api.get(`/patients/${targetPatientId}/timeline`);
       if (res.data && res.data.id) {
-        // Merge with rich fallback data so encounters & past referrals are complete
-        const fallback = DEMO_PATIENT_DATA[targetPatientId] || DEMO_PATIENT_DATA['pat-ramesh-kulkarni'];
+        // Merge with rich fallback data ONLY if target matches a known demo patient
+        const fallback = DEMO_PATIENT_DATA[targetPatientId] || (targetPatientId === 'pat-ramesh-kulkarni' ? DEMO_PATIENT_DATA['pat-ramesh-kulkarni'] : null);
         setPatient({
-          ...fallback,
+          ...(fallback || {}),
           ...res.data,
-          conditions: (res.data.conditions && res.data.conditions.length > 0) ? res.data.conditions : fallback.conditions,
-          referrals: (res.data.referrals && res.data.referrals.length > 0) ? res.data.referrals : fallback.referrals,
-          encounters: (res.data.encounters && res.data.encounters.length > 0) ? res.data.encounters : fallback.encounters,
-          followUps: (res.data.followUps && res.data.followUps.length > 0) ? res.data.followUps : fallback.followUps
+          conditions: (res.data.conditions && res.data.conditions.length > 0) ? res.data.conditions : (fallback?.conditions || []),
+          referrals: (res.data.referrals && res.data.referrals.length > 0) ? res.data.referrals : (fallback?.referrals || []),
+          encounters: (res.data.encounters && res.data.encounters.length > 0) ? res.data.encounters : (fallback?.encounters || []),
+          followUps: (res.data.followUps && res.data.followUps.length > 0) ? res.data.followUps : (fallback?.followUps || [])
         });
       } else {
-        setPatient(DEMO_PATIENT_DATA[targetPatientId] || DEMO_PATIENT_DATA['pat-ramesh-kulkarni']);
+        setPatient(DEMO_PATIENT_DATA[targetPatientId] || (targetPatientId === 'pat-ramesh-kulkarni' ? DEMO_PATIENT_DATA['pat-ramesh-kulkarni'] : {
+          id: targetPatientId,
+          name: user.name || 'Patient',
+          phone: user.phone,
+          conditions: [],
+          referrals: [],
+          encounters: [],
+          followUps: []
+        }));
       }
     } catch {
-      // Graceful offline fallback to rich demo profile
-      setPatient(DEMO_PATIENT_DATA[targetPatientId] || DEMO_PATIENT_DATA['pat-ramesh-kulkarni']);
+      // Graceful offline fallback
+      setPatient(DEMO_PATIENT_DATA[targetPatientId] || (targetPatientId === 'pat-ramesh-kulkarni' ? DEMO_PATIENT_DATA['pat-ramesh-kulkarni'] : {
+        id: targetPatientId,
+        name: user.name || 'Patient',
+        phone: user.phone,
+        conditions: [],
+        referrals: [],
+        encounters: [],
+        followUps: []
+      }));
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../index';
+import { prisma } from '../lib/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ayusync_super_secret';
 
@@ -38,7 +38,37 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     const roles = user.roles.map((r: any) => r.name);
-    const permissions = Array.from(new Set(user.roles.flatMap((r: any) => r.permissions.map((p: any) => p.action)))) as string[];
+    let permissions = Array.from(new Set(user.roles.flatMap((r: any) => r.permissions?.map((p: any) => p.action) || []))) as string[];
+
+    // Ensure built-in roles have their standard operational permissions
+    if (roles.includes('PATIENT')) {
+      const patientPerms = ['patient.read', 'assessment.read', 'referral.read', 'task.read'];
+      permissions = Array.from(new Set([...permissions, ...patientPerms]));
+    }
+    if (roles.includes('WORKER')) {
+      const workerPerms = [
+        'patient.read', 'patient.create', 'patient.update',
+        'encounter.read', 'encounter.create',
+        'assessment.read', 'assessment.create',
+        'referral.read', 'referral.create',
+        'facility.read',
+        'queue.read',
+        'task.read', 'task.update'
+      ];
+      permissions = Array.from(new Set([...permissions, ...workerPerms]));
+    }
+    if (roles.includes('DOCTOR') || roles.includes('ADMIN')) {
+      const doctorPerms = [
+        'patient.read', 'patient.create', 'patient.update',
+        'encounter.read', 'encounter.create',
+        'assessment.read', 'assessment.create',
+        'referral.read', 'referral.create', 'referral.update',
+        'facility.read', 'facility.update',
+        'queue.read', 'queue.manage',
+        'task.read', 'task.update'
+      ];
+      permissions = Array.from(new Set([...permissions, ...doctorPerms]));
+    }
 
     req.user = {
       id: user.id,
