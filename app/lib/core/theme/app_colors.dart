@@ -31,4 +31,16 @@ class AppColors {
   static const Color moderateOrange = Color(0xFFF59E0B);
   static const Color criticalRed = Color(0xFFD32F2F);
   static const Color unreadDot = Color(0xFF2563EB);
+
+  // Splash Screen Palette (Swasthya Setu)
+  static const Color splashBg = Color(0xFF7B9B73);
+  static const Color splashRingsLight = Color(0x38FFFFFF);
+  static const Color splashRingsDark = Color(0x28233722);
+  static const Color splashHeadLeft = Color(0xFF273827);
+  static const Color splashHeadCenter = Color(0xFFFAF6DF);
+  static const Color splashHeadRight = Color(0xFF326E52);
+  static const Color splashBodyDark = Color(0xFF354B34);
+  static const Color splashBodyAmber = Color(0xFFD37B34);
+  static const Color splashBodyCream = Color(0xFFF7F2DA);
+  static const Color splashBodyTeal = Color(0xFF3F8B68);
 }
