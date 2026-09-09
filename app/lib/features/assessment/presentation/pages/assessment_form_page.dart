@@ -5,6 +5,7 @@ import '../../../../core/models/assessment_model.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/patient_validators.dart';
 import '../../../../core/services/voice_recognition_service.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class AssessmentFormPage extends StatefulWidget {
   const AssessmentFormPage({super.key});
@@ -365,8 +366,12 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.medicalPattern,
+        opacity: 0.05,
+        backgroundColor: AppColors.background,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
@@ -889,6 +894,7 @@ class _AssessmentFormPageState extends State<AssessmentFormPage> {
           ),
         ),
       ),
+    ),
     );
   }
 

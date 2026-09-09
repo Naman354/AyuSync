@@ -7,6 +7,7 @@ import '../../../../core/models/assessment_model.dart';
 import '../../../../core/utils/patient_validators.dart';
 import '../../../../core/services/voice_recognition_service.dart';
 import 'registration_success_page.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class NewPatientPage extends StatefulWidget {
   const NewPatientPage({super.key});
@@ -468,18 +469,23 @@ class _NewPatientPageState extends State<NewPatientPage> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildAppBar(appState),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12.0),
-                child: _currentStep == 1 ? _buildStep1Demographics(appState) : _buildStep2Assessment(appState),
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.medicalPattern,
+        opacity: 0.05,
+        backgroundColor: AppColors.background,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildAppBar(appState),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 12.0),
+                  child: _currentStep == 1 ? _buildStep1Demographics(appState) : _buildStep2Assessment(appState),
+                ),
               ),
-            ),
-            _buildBottomNav(appState),
-          ],
+              _buildBottomNav(appState),
+            ],
+          ),
         ),
       ),
     );

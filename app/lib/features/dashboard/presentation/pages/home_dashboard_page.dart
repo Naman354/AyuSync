@@ -7,6 +7,7 @@ import '../../../../core/models/patient_model.dart';
 import '../../../../core/network/network_quality_service.dart';
 import '../../../../core/localization/app_language.dart';
 import '../../../followup/presentation/pages/followup_task_details_page.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class HomeDashboardPage extends StatefulWidget {
   const HomeDashboardPage({super.key});
@@ -43,8 +44,12 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: SingleChildScrollView(
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.medicalPattern,
+        opacity: 0.05,
+        backgroundColor: const Color(0xFFF8FAFC),
+        child: SafeArea(
+          child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Column(
@@ -88,6 +93,7 @@ class _HomeDashboardPageState extends State<HomeDashboardPage> {
           ),
         ),
       ),
+    ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.forest,
         foregroundColor: Colors.white,

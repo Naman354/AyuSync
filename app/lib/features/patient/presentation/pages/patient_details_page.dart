@@ -4,6 +4,7 @@ import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/patient_model.dart';
 import '../../../followup/presentation/pages/followup_task_details_page.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class PatientDetailsPage extends StatefulWidget {
   const PatientDetailsPage({super.key});
@@ -195,8 +196,12 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.communityWatermark,
+        opacity: 0.06,
+        backgroundColor: AppColors.background,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -591,6 +596,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
           ],
         ),
       ),
+    ),
     );
   }
 }

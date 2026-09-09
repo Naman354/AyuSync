@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/models/followup_model.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class FollowUpInboxPage extends StatefulWidget {
   const FollowUpInboxPage({super.key});
@@ -189,7 +190,10 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
         foregroundColor: AppColors.forest,
         elevation: 0,
       ),
-      body: Column(
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.medicalPattern,
+        opacity: 0.05,
+        child: Column(
         children: [
           // 1. Care Gap Metrics Summary Row
           Container(
@@ -493,6 +497,7 @@ class _FollowUpInboxPageState extends State<FollowUpInboxPage> {
                   ),
           ),
         ],
+      ),
       ),
     );
   }

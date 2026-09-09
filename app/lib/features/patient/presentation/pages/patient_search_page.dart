@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class PatientSearchPage extends StatefulWidget {
   const PatientSearchPage({super.key});
@@ -39,8 +40,12 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Column(
-        children: [
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.medicalPattern,
+        opacity: 0.05,
+        backgroundColor: AppColors.background,
+        child: Column(
+          children: [
           // Search Input Field
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -215,6 +220,7 @@ class _PatientSearchPageState extends State<PatientSearchPage> {
           ),
         ],
       ),
+    ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppColors.forest,
         foregroundColor: Colors.white,

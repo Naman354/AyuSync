@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class AiTriagePage extends StatelessWidget {
   const AiTriagePage({super.key});
@@ -57,8 +58,12 @@ class AiTriagePage extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(18.0),
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.communityWatermark,
+        opacity: 0.06,
+        backgroundColor: AppColors.background,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -276,6 +281,7 @@ class AiTriagePage extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

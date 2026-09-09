@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/localization/app_language.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -88,7 +89,11 @@ class _LoginPageState extends State<LoginPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.communityWatermark,
+        opacity: 0.08,
+        backgroundColor: Colors.white,
+        child: SafeArea(
         child: Stack(
           children: [
             // Decorative background concentric ripples
@@ -400,8 +405,9 @@ class _LoginPageState extends State<LoginPage> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildLanguageOption(AppState appState, AppLanguage language, String label) {
     final isSelected = appState.currentLanguage == language;

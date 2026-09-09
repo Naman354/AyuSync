@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/state/app_state.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/subtle_background_scaffold.dart';
 
 class SyncQueuePage extends StatefulWidget {
   const SyncQueuePage({super.key});
@@ -66,7 +67,10 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
         foregroundColor: AppColors.forest,
         elevation: 0,
       ),
-      body: Column(
+      body: SubtleHealthcareBackground(
+        type: BackgroundIllustrationType.medicalPattern,
+        opacity: 0.05,
+        child: Column(
         children: [
           // Top Status Header
           Container(
@@ -277,6 +281,7 @@ class _SyncQueuePageState extends State<SyncQueuePage> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
