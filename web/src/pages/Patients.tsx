@@ -107,11 +107,18 @@ const DEMO_PATIENTS = [
                 <li key={p.id}>
                   <Link
                     to={`/patients/${p.id}`}
-                    className="group sm:grid sm:grid-cols-[2fr_1fr_1.5fr_auto] flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50/80 transition-colors"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem('ayusync_selected_patient_id', p.id);
+                        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: p.id, name: p.name }));
+                        window.dispatchEvent(new CustomEvent('ayusync:active_patient', { detail: { id: p.id, name: p.name } }));
+                      } catch {}
+                    }}
+                    className="group sm:grid sm:grid-cols-[2fr_1fr_1.5fr_auto] flex items-center justify-between gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-gray-50/80 transition-colors"
                   >
                     {/* Column 1: Patient Identity */}
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-semibold text-sm shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-semibold text-sm shrink-0 shadow-2xs">
                         {p.name?.charAt(0) || 'P'}
                       </div>
                       <div className="min-w-0">
@@ -126,7 +133,7 @@ const DEMO_PATIENTS = [
                           <span>{p.age ? `${p.age} yrs` : '--'}</span>
                           <span>·</span>
                           <span>{p.gender || '--'}</span>
-                          {(p.village || p.address) && <><span>·</span><span>{p.village || p.address}</span></>}
+                          {(p.village || p.address) && <><span>·</span><span className="truncate max-w-[120px]">{p.village || p.address}</span></>}
                         </div>
                       </div>
                     </div>

@@ -225,6 +225,22 @@ export default function PatientProfile() {
     if (id) fetchPatient();
   }, [id]);
 
+  // Sync active patient profile dynamically across header and portal navigation
+  useEffect(() => {
+    if (patient?.name) {
+      window.dispatchEvent(new CustomEvent('ayusync:active_patient', {
+        detail: { id: patient.id || id, name: patient.name }
+      }));
+      try {
+        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: patient.id || id, name: patient.name }));
+        sessionStorage.setItem('ayusync_selected_patient_id', patient.id || id);
+      } catch {}
+    }
+    return () => {
+      window.dispatchEvent(new CustomEvent('ayusync:active_patient', { detail: null }));
+    };
+  }, [patient?.id, patient?.name, id]);
+
   const handleAddCondition = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!condName.trim()) {
@@ -480,7 +496,7 @@ export default function PatientProfile() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
             {isWorker && (
               <button
                 onClick={handleOpenReferralModal}
@@ -489,16 +505,26 @@ export default function PatientProfile() {
                 <Building2 size={14} /> Refer to Hospital
               </button>
             )}
+            <Link to={`/patient?id=${patient.id || id}`}>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-[#1e6641] transition-colors cursor-pointer"
+                title="View this patient profile in My Health Portal"
+              >
+                <User size={14} className="text-[#1e6641]" />
+                Health Portal
+              </button>
+            </Link>
             <button
               onClick={() => setShowHistoryModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 text-xs font-semibold text-gray-700 transition-colors cursor-pointer"
             >
               <History size={14} className="text-[#1e6641]" />
               Visit History ({allEncounters.length})
             </button>
             <Link to="/patients">
               <Button variant="outline" className="text-xs flex items-center gap-1">
-                <ArrowLeft size={13} /> Back to patients
+                <ArrowLeft size={13} /> Back
               </Button>
             </Link>
           </div>
