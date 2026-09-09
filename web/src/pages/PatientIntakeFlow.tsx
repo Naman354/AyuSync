@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
+import { getAuthUser } from '../lib/auth';
 import { useNetworkStatus } from '../lib/network';
 import { saveLocalPatient, enqueueOfflineMutation } from '../lib/offlineSync';
 import { Button } from '../components/ui/Button';
@@ -332,7 +333,7 @@ export default function PatientIntakeFlow() {
         });
       }
 
-      const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+      const userObj = getAuthUser() || {};
       const referralPayload = {
         token,
         patientName: cleanName || 'Community Patient',
@@ -385,7 +386,7 @@ export default function PatientIntakeFlow() {
               payload: { patientId: offlinePatId, destinationId: selectedFacility, urgency: effectiveUrgency, reason: cleanReason }
             });
           }
-          const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+          const userObj = getAuthUser() || {};
           navigate('/referral-success', {
             state: {
               token,
@@ -428,7 +429,7 @@ export default function PatientIntakeFlow() {
         });
       }
 
-      const userObj = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+      const userObj = getAuthUser() || {};
       navigate('/referral-success', {
         state: {
           token,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../lib/api';
+import { api } from '../lib/api';
+import { setAuthSession } from '../lib/auth';
 import { HeartPulse, Stethoscope, UserCheck, ArrowRight, Eye, EyeOff, User, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 
 export default function Login() {
@@ -44,8 +45,7 @@ export default function Login() {
     setLoading(true);
     try {
       const { data } = await api.post('/auth/login', { phone: loginPhone, password: loginPass });
-      localStorage.setItem('ayusync_token', data.token);
-      localStorage.setItem('ayusync_user', JSON.stringify(data.user));
+      setAuthSession(data.token, data.user);
       if (data.user.role === 'WORKER') {
         navigate('/worker');
       } else if (data.user.role === 'PATIENT') {
@@ -140,6 +140,16 @@ export default function Login() {
 
           {/* Quick demo access */}
           <div className="mt-7 pt-6 border-t border-gray-200">
+            {/* Multi-Tab Demo Callout */}
+            <div className="mb-3.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-[11px] text-emerald-900 flex items-center justify-between gap-2 shadow-xs">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-emerald-600 shrink-0" />
+                <span className="leading-tight">
+                  <strong className="text-emerald-950 font-semibold">Multi-Tab Demo Active:</strong> Each tab runs an independent session. Open multiple tabs to demo Doctor, ASHA Worker, and Patient simultaneously.
+                </span>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quick Demo Access</p>
               <button
@@ -147,7 +157,7 @@ export default function Login() {
                 onClick={() => setShowAllDemo(!showAllDemo)}
                 className="text-xs text-[#1e6641] hover:underline font-medium flex items-center gap-1"
               >
-                <span>{showAllDemo ? 'Hide all accounts' : 'View all 8 accounts'}</span>
+                <span>{showAllDemo ? 'Hide all accounts' : 'View all 10 accounts'}</span>
                 {showAllDemo ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
             </div>
@@ -243,6 +253,8 @@ export default function Login() {
                     { role: 'ANM Nurse', name: 'Kavita More (Baramati)', phone: '+919998887778' },
                     { role: 'Patient', name: 'Ramesh Kulkarni (Hypertension)', phone: '+919111222333' },
                     { role: 'Patient', name: 'Pooja Sharma (Maternal Care)', phone: '+919111222334' },
+                    { role: 'Patient', name: 'Dilip Thorat (Diabetic Check)', phone: '+919111222338' },
+                    { role: 'Patient', name: 'Sunita Chavan (Anemia Follow-up)', phone: '+919111222341' },
                   ].map(acc => (
                     <li key={acc.phone} className="pt-1.5 flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -263,8 +275,11 @@ export default function Login() {
                     </li>
                   ))}
                 </ul>
-                <div className="pt-2 text-[10px] text-gray-400 border-t border-gray-100 text-center">
-                  Universal demo password: <span className="font-mono font-semibold text-gray-600">password123</span>
+                <div className="pt-2 text-[10px] text-gray-500 border-t border-gray-100 text-center leading-relaxed">
+                  Universal demo password: <span className="font-mono font-semibold text-gray-700">password123</span>
+                  <div className="text-[10px] text-emerald-700 mt-0.5">
+                    ✨ Any 10-digit mobile number can log in as a citizen / patient.
+                  </div>
                 </div>
               </div>
             )}

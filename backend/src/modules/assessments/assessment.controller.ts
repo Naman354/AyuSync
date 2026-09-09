@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../index';
+import { prisma } from '../../lib/prisma';
 import { analyzeAssessment } from '../ai/ai.service';
 import { validateVitals } from '../../utils/validators';
 

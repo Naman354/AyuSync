@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthToken, clearAuthSession } from './auth';
 
 /**
  * Retrieves the backend base URL strictly from environment variables (VITE_API_URL).
@@ -30,7 +31,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('ayusync_token');
+    const token = getAuthToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -43,9 +44,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear token on unauthorized
-      localStorage.removeItem('ayusync_token');
-      localStorage.removeItem('ayusync_user');
+      // Clear tab-scoped session on unauthorized
+      clearAuthSession();
       window.location.href = '/login';
     }
     return Promise.reject(error);

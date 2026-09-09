@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import api, { getBaseServerUrl } from '../lib/api';
+import { getAuthUser, getAuthToken } from '../lib/auth';
 import PageShell from '../components/ui/PageShell';
 import { SkeletonList } from '../components/ui/SkeletonLoader';
 import InlineError from '../components/ui/InlineError';
@@ -108,7 +109,7 @@ const DEMO_WORKER_PATIENTS = [
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function WorkerDashboard() {
-  const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+  const user = getAuthUser() || {};
 
   const { isOnline, isOffline }       = useNetworkStatus();
   const [patients, setPatients]       = useState<any[]>(DEMO_WORKER_PATIENTS);
@@ -224,7 +225,7 @@ export default function WorkerDashboard() {
     const serverUrl = getBaseServerUrl();
     const socket = io(serverUrl, {
       transports: ['websocket', 'polling'],
-      auth: { token: localStorage.getItem('ayusync_token') },
+      auth: { token: getAuthToken() },
     });
 
     socket.on('connect', () => {

@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../index';
+import { prisma } from '../../lib/prisma';
 import { getIO } from '../../events/socket';
 
-const VALID_TRANSITIONS: Record<string, string[]> = {
+export const VALID_TRANSITIONS: Record<string, string[]> = {
   'CREATED': ['SUBMITTED', 'CANCELLED'],
   'SUBMITTED': ['ACCEPTED', 'REJECTED', 'COMPLETED', 'CANCELLED'],
   'ACCEPTED': ['SCHEDULED', 'PATIENT_ARRIVED', 'COMPLETED', 'CANCELLED'],

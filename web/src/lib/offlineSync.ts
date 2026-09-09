@@ -1,4 +1,5 @@
 import api from './api';
+import { getAuthUser } from './auth';
 
 export const MUTATION_QUEUE_KEY = 'ayusync_mutation_queue';
 export const LOCAL_PATIENTS_KEY = 'ayusync_local_patients';
@@ -86,7 +87,11 @@ export async function flushOfflineSync(): Promise<{ success: boolean; syncedCoun
   window.dispatchEvent(new CustomEvent('ayusync:sync_start'));
 
   try {
-    const user = JSON.parse(localStorage.getItem('ayusync_user') || '{}');
+    const user = getAuthUser() || {};
+    // Only workers flush offline sync queues
+    if (user.role && user.role !== 'WORKER') {
+      return { success: true, syncedCount: 0, remainingCount: q.length };
+    }
     const workerId = user.workerId || user.id || 'worker-sunita-patil';
 
     const response = await api.post('/sync', {

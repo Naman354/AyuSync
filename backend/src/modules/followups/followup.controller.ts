@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../index';
+import { prisma } from '../../lib/prisma';
 import { getIO } from '../../events/socket';
 import { createNotification } from '../notifications/notification.service';
 

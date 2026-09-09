@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { prisma } from '../../index';
+import { prisma } from '../../lib/prisma';
 import { sanitizeString, validateAge, validatePhone, validateEnum } from '../../utils/validators';
 
 // 10. PATIENT RECORD: creation, search, profile, history, timeline
@@ -110,32 +110,50 @@ export const searchPatients = async (req: Request, res: Response) => {
 export const getPatientTimeline = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
-    // Fetch longitudinal record
-    const patient = await prisma.patient.findUnique({
-      where: { id },
-      include: {
-        encounters: {
-          include: {
-            assessments: { include: { symptoms: true, aiRecommendations: true } },
-            vitals: true,
-            prescriptions: true,
-            clinicalObs: true
-          },
-          orderBy: { start: 'desc' }
+
+    const includeBlock = {
+      identifiers: true,
+      encounters: {
+        include: {
+          assessments: { include: { symptoms: true, aiRecommendations: true } },
+          vitals: true,
+          prescriptions: true,
+          clinicalObs: true
         },
-        referrals: {
-          include: { origin: true, destination: true, counterReferral: true, events: { orderBy: { createdAt: 'desc' } } }
-        },
-        conditions: { orderBy: { diagnosedAt: 'desc' } },
-        followUps: {
-          include: { worker: { include: { user: true } } },
-          orderBy: { dueDate: 'asc' }
-        }
+        orderBy: { start: 'desc' as const }
+      },
+      referrals: {
+        include: { origin: true, destination: true, counterReferral: true, events: { orderBy: { createdAt: 'desc' as const } } }
+      },
+      conditions: { orderBy: { diagnosedAt: 'desc' as const } },
+      followUps: {
+        include: { worker: { include: { user: true } } },
+        orderBy: { dueDate: 'asc' as const }
       }
+    };
+
+    // Primary: fetch by primary key UUID/CUID
+    let patient = await prisma.patient.findUnique({
+      where: { id },
+      include: includeBlock
     });
 
-    if (!patient) return res.status(404).json({ error: 'Not found' });
+    // Secondary: lookup by ABHA identifier or phone number
+    if (!patient) {
+      const cleanTarget = String(id).trim();
+      patient = await prisma.patient.findFirst({
+        where: {
+          OR: [
+            { identifiers: { some: { value: cleanTarget } } },
+            { phone: cleanTarget },
+            { phone: cleanTarget.replace(/\s+/g, '') }
+          ]
+        },
+        include: includeBlock
+      });
+    }
+
+    if (!patient) return res.status(404).json({ error: 'Patient not found' });
     res.json(patient);
   } catch (error) {
     res.status(500).json({ error: 'Internal Server Error' });

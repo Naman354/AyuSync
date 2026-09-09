@@ -105,12 +105,19 @@ async function main() {
     }
   });
 
+  const patientPermissions = permissionRecords.filter(p =>
+    ['patient.read', 'assessment.read', 'referral.read', 'task.read'].includes(p.action)
+  );
+
   const patientRole = await prisma.role.upsert({
     where: { name: 'PATIENT' },
-    update: {},
+    update: {
+      permissions: { connect: patientPermissions.map(p => ({ id: p.id })) }
+    },
     create: {
       name: 'PATIENT',
-      description: 'Citizens and patients accessing health timeline'
+      description: 'Citizens and patients accessing health timeline',
+      permissions: { connect: patientPermissions.map(p => ({ id: p.id })) }
     }
   });
 
@@ -434,7 +441,14 @@ async function main() {
     { phone: '+919111222334', name: 'Pooja Sharma', age: 26, gender: 'FEMALE', village: 'Baramati Rural' },
     { phone: '+919111222335', name: 'Aniket Gaikwad', age: 34, gender: 'MALE', village: 'Khandala Gaothan' },
     { phone: '+919111222336', name: 'Savita Jadhav', age: 48, gender: 'FEMALE', village: 'Saswad Ward 4' },
-    { phone: '+919111222337', name: 'Rahul More', age: 19, gender: 'MALE', village: 'Baramati Town' }
+    { phone: '+919111222337', name: 'Rahul More', age: 19, gender: 'MALE', village: 'Baramati Town' },
+    { phone: '+919111222338', name: 'Dilip Thorat', age: 45, gender: 'MALE', village: 'Baramati Ward 1' },
+    { phone: '+919111222339', name: 'Babanrao Shinde', age: 62, gender: 'MALE', village: 'Khandala Sub-center' },
+    { phone: '+919111222340', name: 'Vilas Bhosale', age: 51, gender: 'MALE', village: 'Saswad Ward 2' },
+    { phone: '+919111222341', name: 'Sunita Chavan', age: 29, gender: 'FEMALE', village: 'Khandala Ward 3' },
+    { phone: '+919111222342', name: 'Aarav Patel', age: 2, gender: 'MALE', village: 'Khandala East' },
+    { phone: '+919111222343', name: 'Meena Kumari', age: 34, gender: 'FEMALE', village: 'Baramati Ward 1' },
+    { phone: '+919111222344', name: 'Suresh Patil', age: 67, gender: 'MALE', village: 'Khandala Gaothan' }
   ];
 
   for (const pu of patientUsersData) {
