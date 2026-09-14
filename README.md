@@ -2,11 +2,11 @@
 ### Rural & Underserved Healthcare Access, Continuity & Closed-Loop Orchestration Platform
 **Smart India Hackathon (SIH 2026)** · *Targeted for Rural Frontline Healthcare in India*
 
-[![Status: Complete](https://img.shields.io/badge/System%20Status-100%25%20Verified-emerald?style=for-the-badge)](docs/FINAL_COMPLETION_REPORT.md)
-[![Backend: 24/24 Phases](https://img.shields.io/badge/Backend-24%2F24%20Phases%20Complete-blue?style=for-the-badge)](docs/MASTER_PLAN_REQUIREMENT_MATRIX.md)
-[![Frontend: 20/20 Phases](https://img.shields.io/badge/Web%20Dashboard-20%2F20%20Phases%20Complete-indigo?style=for-the-badge)](docs/MASTER_PLAN_REQUIREMENT_MATRIX.md)
+[![Backend: Node.js + Express](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express%20%2B%20Prisma-blue?style=for-the-badge)](backend/)
+[![Web Dashboard: React 18](https://img.shields.io/badge/Web%20Dashboard-React%2018%20%2B%20Vite-indigo?style=for-the-badge)](web/)
 [![Mobile: Flutter 3.2+](https://img.shields.io/badge/Mobile-Flutter%20Offline--First-teal?style=for-the-badge)](app/)
 [![AI: Explainable XAI](https://img.shields.io/badge/AI%20Microservice-FastAPI%20%2B%20XAI-violet?style=for-the-badge)](ai-service/)
+[![Database: PostgreSQL 15](https://img.shields.io/badge/Database-PostgreSQL%2015-emerald?style=for-the-badge)](backend/prisma/)
 [![Tests: 22/22 Passing](https://img.shields.io/badge/Tests-22%2F22%20E2E%20Passed-success?style=for-the-badge)](backend/test_phase_g.js)
 
 ---
@@ -43,7 +43,7 @@ flowchart LR
                                ┌──────────────────────────────────────────────┐
                                │             Frontline Clients                │
                                │  - Flutter Mobile App (SQLite + Provider)    │
-                               │  - React 18 Web Dashboard (Dexie IndexedDB)  │
+                               │  - React 18 Web Dashboard (Local Queue Sync) │
                                └──────────────────────┬───────────────────────┘
                                                       │ HTTPS / WSS / REST
                                                       ▼
@@ -51,9 +51,9 @@ flowchart LR
  │                              Central API Gateway (Node.js + TypeScript + Express)                      │
  │                                                                                                        │
  │  ├── RBAC & Auth (JWT)              ├── Physiological Vitals Bounds Validation                         │
- │  ├── Referral State Machine (8-stg) ├── Dynamic Facility Telemetry & Bed Capacity Routing               │
+ │  ├── Referral State Machine (8-stg) ├── Dynamic Facility Bed Capacity & Readiness Routing             │
  │  ├── Sync & Idempotency Engine      ├── Automated Care-Gap Background Engine (node-cron)               │
- │  ├── Real-time Socket.IO Server     └── Sandboxed ABDM & FHIR Interoperability Adapter                 │
+ │  ├── Real-time Socket.IO Server     └── Standardized 14-Digit ABHA Formatting & Audit Logs             │
  └──────────────────────┬─────────────────────────────┬────────────────────────────────┬──────────────────┘
                         │                             │                                │
                         ▼                             ▼                                ▼
@@ -67,9 +67,9 @@ flowchart LR
 ### Component Stack
 | Subsystem | Technologies & Frameworks | Key Responsibilities |
 |---|---|---|
-| **Backend API Gateway** | Node.js, Express, TypeScript, Prisma ORM, Socket.IO, node-cron, ioredis, bcrypt, jsonwebtoken | REST endpoints, WebSocket broadcaster, referral state transitions, background jobs, physiological validation |
-| **Doctor & Admin Web** | React 18, TypeScript, Vite, TailwindCSS, Dexie.js (IndexedDB), Lucide Icons, Web Speech API | Live consultation queue, clinical triage review, facility readiness, predictive ops, citizen timeline |
-| **Frontline Mobile App** | Flutter 3.2+, Dart, `sqflite`, `connectivity_plus`, `provider`, `speech_to_text`, `uuid` | ASHA offline intake, local SQLite queuing, background FIFO synchronization, counter-referral task inbox |
+| **Backend API Gateway** | Node.js, Express, TypeScript, Prisma ORM, Socket.IO, node-cron, ioredis, bcrypt, jsonwebtoken | REST endpoints, WebSocket broadcaster, referral state transitions, background care-gap jobs, physiological vitals validation |
+| **Doctor & Frontline Web** | React 18, TypeScript, Vite, TailwindCSS, Socket.io-client, Lucide Icons | Live consultation queue, clinical triage review, facility readiness & bed capacity, care-gap tracking, patient profile & timeline |
+| **Frontline Mobile App** | Flutter 3.2+, Dart, `sqflite`, `connectivity_plus`, `provider`, `speech_to_text`, `uuid` | ASHA offline intake, local SQLite queuing, speech-to-text symptom capture, background FIFO synchronization, counter-referral task inbox |
 | **Explainable AI Service** | Python 3.10+, FastAPI, Pydantic, Uvicorn | Transparent clinical triage (`/triage`), facility routing scoring (`/route`), feature attribution |
 | **Database & Caching** | PostgreSQL 15 (Supabase or Docker), Redis 7 (Upstash or Docker) | Normalized transactional storage, audit logs, queue telemetry, reverse-proxy caching |
 
@@ -107,11 +107,11 @@ AyuSync/
 │   ├── FINAL_COMPLETION_REPORT.md        # 100% verification sign-off
 │   ├── FINAL_PROJECT_AUDIT.md            # Architecture & status report
 │   └── MASTER_PLAN_REQUIREMENT_MATRIX.md # 24 Backend & 20 Web phase matrix
-├── web/                     # React 18 + Vite Doctor & Citizen Dashboard
+├── web/                     # React 18 + Vite Doctor, Frontline Worker & Patient Dashboard
 │   ├── src/
-│   │   ├── components/      # UI widgets, layout navbar, stat cards
-│   │   ├── lib/             # Dexie.js offline DB, sync engine, speech adapter, i18n
-│   │   ├── pages/           # 15 distinct views (Queue, Triage, CareGaps, Intake)
+│   │   ├── components/      # UI widgets, layout navbar, stat cards, modals
+│   │   ├── lib/             # Local offline queue & sync engine, auth session management, API client
+│   │   ├── pages/           # 11 active routed views (Queue, Dashboard, Intake, CareGaps, etc.)
 │   │   └── App.tsx          # Multi-role routing, protected guards, splash
 │   ├── package.json         # Web dependencies & scripts
 │   └── tailwind.config.js   # AyuSync rural theme & clinical color tokens
@@ -125,44 +125,41 @@ AyuSync/
 ## 👥 4. User Roles & Core Workflows
 
 ### 1. 👩‍💼 Frontline Health Worker (ASHA / ANM)
-* **Offline Intake**: Register citizens and capture detailed vitals (BP, SpO2, Heart Rate, Temperature, Random Blood Sugar) even without cellular reception.
-* **Voice Dictation**: Capture symptom descriptions and patient history in Hindi, Marathi, or English using the embedded Speech Adapter.
-* **Explainable AI Assist**: Immediate on-device triage recommendation showing contributing vitals, urgency classification, and confidence rating.
-* **FIFO Sync Queue**: All offline operations are stored in SQLite/IndexedDB and synced with the backend automatically on network restoration.
-* **Counter-Referral Task Inbox**: Receives actionable home follow-up instructions directly from district hospital doctors after patient discharge.
+* **Offline Patient Intake**: Register citizens and capture physiological vitals (BP, SpO2, Heart Rate, Temperature, Random Blood Sugar) even with zero network connectivity.
+* **Voice-to-Text Symptom Entry (Mobile)**: Frontline workers can dictate symptom descriptions hands-free in the Flutter mobile application using device speech recognition.
+* **Explainable AI Triage Assist**: Immediate triage recommendations displaying contributing vitals, urgency classifications, confidence ratings, and missing vital alerts.
+* **FIFO Offline Sync**: Mutations are queued locally (SQLite on Flutter, local storage queue on Web) and automatically synchronized with `/api/sync` on network restoration.
+* **Counter-Referral Task Inbox**: Receives actionable home follow-up instructions and prescriptions assigned by hospital specialists after patient consultations.
 
 ### 2. 👨‍⚕️ Doctor / Specialist (Medical Officer, OBGYN, Pediatrician)
-* **Real-Time Priority Queue**: Instant WebSocket queue updates stratified by urgency: `EMERGENCY`, `URGENT`, `PRIORITY`, `ROUTINE`.
-* **Explainable Clinical Drawer**: Clear breakdown of AI score, highlighted physiological outliers, and missing vitals warnings.
-* **Consultation & Counter-Referrals**: Record diagnoses, order diagnostics, prescribe medicines, and assign specific home follow-up tasks to the patient's local ASHA worker in a single workflow.
-* **State Machine Governance**: Move referrals through audited transitions (`IN_CONSULTATION` ➔ `COUNTER_REFERRED` ➔ `COMPLETED`).
+* **Real-Time Priority Queue**: Live WebSocket queue updates automatically stratified by clinical urgency: `EMERGENCY`, `URGENT`, `PRIORITY`, and `ROUTINE`.
+* **Explainable Clinical Drawer**: Review patient assessment history, highlighted physiological outliers, AI diagnostic reasons, and missing vitals warnings.
+* **Consultation & Counter-Referrals**: Record clinical diagnoses, order diagnostics, prescribe medication regimens, and dispatch home follow-up tasks directly to the patient's local ASHA worker.
+* **Audited State Machine Transitions**: Advance referrals through audited lifecycle states (`IN_CONSULTATION` ➔ `COUNTER_REFERRED` ➔ `COMPLETED`).
+* **Facility Readiness & Capacity**: Inspect live bed availability (General, Maternal, ICU/HDU, Oxygen-supported) across regional health facilities.
+* **Care-Gap Surveillance**: Monitor overdue follow-up tasks and stalled referrals across the district to ensure continuity of care.
 
 ### 3. 🧑 Patient / Citizen
-* **Personal Health Record Timeline**: Mobile-friendly access to historical clinic visits, vitals charts, and diagnosed conditions.
+* **Personal Health Record Timeline**: Mobile-friendly access to historical clinic visits, vitals records, and diagnosed conditions.
 * **Referral & Appointment Tracking**: Real-time status of specialist referrals, booked consultation slots, and hospital directions.
-* **Digital Prescriptions**: Download and view doctor instructions and prescribed regimens.
-* **Universal Citizen Access**: Any 10-digit Indian phone number can instantly access citizen-tier services.
-
-### 4. 🏥 Facility Administrator & District Health Officer
-* **Dynamic Facility Readiness**: Real-time visibility into General Ward beds, ICU/HDU capacity, Oxygen-supported beds, and ambulance telemetry across district hospitals.
-* **Predictive Operations**: Forecast potential drug stockouts and bed bottlenecks based on regional triage patterns.
-* **District Care-Gap Surveillance**: Monitor unresolved referrals and overdue home visits across all sub-centers.
+* **Digital Prescriptions**: View doctor clinical notes, diagnostic orders, and prescribed medications.
+* **Universal Citizen Access**: Any valid 10-digit Indian phone number can instantly authenticate and access citizen-tier services.
 
 ---
 
 ## ⭐ 5. Key Highlights & Verified Features
 
-- [x] **100% Phase Completion**: 24/24 Backend phases and 20/20 Web Frontend phases fully completed and audited.
-- [x] **Dual Offline-First Architecture**: Powered by `Dexie.js` (IndexedDB) on Web and `sqflite` on Flutter Mobile, with deterministic idempotency tokens (`operationId`) and timestamp conflict resolution.
-- [x] **Explainable AI (XAI)**: Clinical triage returns verifiable feature attribution, confidence ratings, and missing vital alerts with automatic heuristic fallback if the AI microservice is unreachable.
+- [x] **Closed-Loop Counter-Referral Engine**: Frontline village intake ➔ Central API gateway ➔ Python AI triage ➔ Real-time doctor consultation ➔ Post-discharge ASHA task creation ➔ Home follow-up closure verification.
+- [x] **Offline-First Resilience**: Powered by local mutation queueing on Web and `sqflite` (SQLite) on Flutter Mobile, with deterministic idempotency tokens (`operationId`), timestamp conflict resolution, and background FIFO synchronization.
+- [x] **Explainable AI (XAI)**: Clinical triage returns transparent feature attribution, confidence ratings, and missing vital alerts with automatic deterministic fallback if the AI microservice is unreachable.
 - [x] **Strict 8-Stage Referral State Machine**:
   `CREATED` ➔ `SUBMITTED` ➔ `ACCEPTED` ➔ `SCHEDULED` ➔ `PATIENT_ARRIVED` ➔ `IN_CONSULTATION` ➔ `COUNTER_REFERRED` ➔ `COMPLETED` (enforced with immutable audit event trails).
-- [x] **Deterministic Closed Loop**: Discharging a patient automatically synthesizes a `FollowUp` task pushed directly to the assigned frontline ASHA worker's device.
+- [x] **Deterministic Closed Loop**: Completing a consultation with post-discharge care automatically synthesizes a `FollowUp` task pushed directly to the assigned frontline ASHA worker's device.
 - [x] **Automated Care-Gap Engine**: Background `node-cron` daemon continuously identifies stalled referrals (>48 hours in `SUBMITTED`) and overdue home follow-ups, triggering system escalations.
-- [x] **Multilingual Support**: Real-time language switching between **English (EN)**, **Hindi (HI)**, and **Marathi (MR)**.
-- [x] **Voice Dictation Integration**: Built-in Speech Adapter enabling frontline workers to dictate symptoms hands-free.
-- [x] **Multi-Tab Demo Isolation**: Separate browser tabs can run concurrent independent sessions (e.g., Doctor, ASHA Worker, and Patient side-by-side) without session conflicts.
-- [x] **ABDM Sandbox Interoperability**: FHIR JSON mapping adapter and ABHA ID generator sandbox ready for Ayushman Bharat Digital Mission integration.
+- [x] **Multilingual Mobile App**: Real-time language switching between **English (EN)**, **Hindi (HI)**, and **Marathi (MR)** in the Flutter frontline mobile app.
+- [x] **Voice-to-Text Input**: Integrated speech-to-text on the Flutter mobile app enabling frontline ASHA workers to capture symptom descriptions hands-free.
+- [x] **Multi-Tab Demo Isolation**: Separate browser tabs run concurrent independent sessions (Doctor, ASHA Worker, and Patient side-by-side) using tab-scoped `sessionStorage` without session conflicts.
+- [x] **Standardized 14-Digit ABHA Support**: Demographic intake and digital referral summaries format and validate 14-digit Ayushman Bharat Health Account (ABHA) IDs (`XX-XXXX-XXXX-XXXX`).
 
 ---
 
@@ -397,10 +394,10 @@ Use the built-in [`render.yaml`](render.yaml) blueprint:
 
 ## 📜 11. Audit Records & Technical Reports
 
-For detailed phase-by-phase implementation matrices, architectural audits, and SIH 2026 rubric mappings, refer to the documents in [`/docs`](docs/):
-- **[Final Completion Report](docs/FINAL_COMPLETION_REPORT.md)**: 100% sign-off on all 24 backend phases, 20 web phases, and integration criteria.
-- **[Final Project Audit](docs/FINAL_PROJECT_AUDIT.md)**: Executive architectural breakdown across database, AI, security, and offline synchronizers.
-- **[Master Plan Requirement Matrix](docs/MASTER_PLAN_REQUIREMENT_MATRIX.md)**: Detailed phase-by-phase mapping from `complete_master_plan.md` to verifiable codebase evidence.
+For detailed historical documentation, hackathon requirement matrices, and architectural audits, refer to the documents in [`/docs`](docs/):
+- **[Final Completion Report](docs/FINAL_COMPLETION_REPORT.md)**: Hackathon milestone sign-off and verification report.
+- **[Final Project Audit](docs/FINAL_PROJECT_AUDIT.md)**: Architectural breakdown across database, AI, security, and offline synchronizers.
+- **[Master Plan Requirement Matrix](docs/MASTER_PLAN_REQUIREMENT_MATRIX.md)**: SIH master specification rubric and phase mapping from `complete_master_plan.md`.
 
 ---
 
