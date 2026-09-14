@@ -483,13 +483,17 @@ export default function PatientDashboard() {
       }
     };
 
-    window.addEventListener('ayusync:task_completed', onTaskCompleted);
-    window.addEventListener('storage', () => {
+    // Bug 2 fix: store the storage handler in a named variable so it can be cleaned up
+    const onStorageChange = () => {
       setCompletedTaskIds(getCompletedTaskIds());
-    });
+    };
+
+    window.addEventListener('ayusync:task_completed', onTaskCompleted);
+    window.addEventListener('storage', onStorageChange);
 
     return () => {
       window.removeEventListener('ayusync:task_completed', onTaskCompleted);
+      window.removeEventListener('storage', onStorageChange);
     };
   }, [targetPatientId]);
 
@@ -642,6 +646,22 @@ export default function PatientDashboard() {
     window.print();
   };
 
+  // Bug 1 fix: this useEffect MUST be declared before any early return (React Rules of Hooks).
+  // It syncs the active patient name into the top navbar. Uses `patient` state directly.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const activeP = patient || DEMO_PATIENT_DATA[targetPatientId] || null;
+    if (activeP?.name) {
+      window.dispatchEvent(new CustomEvent('ayusync:active_patient', {
+        detail: { id: activeP.id || targetPatientId, name: activeP.name }
+      }));
+      try {
+        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: activeP.id || targetPatientId, name: activeP.name }));
+        sessionStorage.setItem('ayusync_selected_patient_id', activeP.id || targetPatientId);
+      } catch {}
+    }
+  }, [patient?.id, patient?.name, targetPatientId]);
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto space-y-5 animate-page-in p-2">
@@ -674,20 +694,13 @@ export default function PatientDashboard() {
   const followUps = p?.followUps || [];
   const pendingFollowUps = followUps.filter((f: any) => f?.status !== 'COMPLETED' && !completedTaskIds.has(f?.id));
   const encounters = p?.encounters || [];
-  const prescriptions = p?.prescriptions || latestEncounter?.prescriptions || [];
-
-  // Synchronize active patient with top-right navbar profile display
-  useEffect(() => {
-    if (p?.name) {
-      window.dispatchEvent(new CustomEvent('ayusync:active_patient', {
-        detail: { id: p.id || targetPatientId, name: p.name }
-      }));
-      try {
-        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: p.id || targetPatientId, name: p.name }));
-        sessionStorage.setItem('ayusync_selected_patient_id', p.id || targetPatientId);
-      } catch {}
-    }
-  }, [p?.id, p?.name, targetPatientId]);
+  // Bug 4 fix: normalize prescriptions — encounter prescriptions from the backend use
+  // `medicationName` while demo/patient-level prescriptions use `medicine`. Unify to `medicine`.
+  const rawPrescriptions = p?.prescriptions || latestEncounter?.prescriptions || [];
+  const prescriptions = rawPrescriptions.map((rx: any) => ({
+    ...rx,
+    medicine: rx.medicine || rx.medicationName || rx.name || 'Unknown medication',
+  }));
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-page-in">
@@ -956,36 +969,45 @@ export default function PatientDashboard() {
                 </span>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                {prescriptions.map((rx: any, idx: number) => (
-                  <div key={rx.id || idx} className="p-3.5 rounded-xl border border-emerald-200/80 bg-emerald-50/40 space-y-2">
-                    <div className="flex items-start justify-between gap-1.5">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
-                        <Pill size={13} className="text-[#1e6641] shrink-0" />
-                        <span>{rx.medicine}</span>
+              {/* Bug 3 fix: show empty state instead of blank card */}
+              {prescriptions.length === 0 ? (
+                <div className="py-5 text-center rounded-xl bg-gray-50 border border-dashed border-gray-200 text-xs text-gray-500">
+                  <Pill size={24} className="mx-auto text-gray-300 mb-1.5" />
+                  <p className="font-semibold text-gray-600">No prescriptions on record</p>
+                  <p className="text-gray-400 mt-0.5">Prescriptions will appear here once assigned by the attending doctor.</p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {prescriptions.map((rx: any, idx: number) => (
+                    <div key={rx.id || idx} className="p-3.5 rounded-xl border border-emerald-200/80 bg-emerald-50/40 space-y-2">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                          <Pill size={13} className="text-[#1e6641] shrink-0" />
+                          <span>{rx.medicine}</span>
+                        </div>
+                        <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-white text-[#1e6641] border border-emerald-200 uppercase shrink-0">
+                          {rx.status || 'ACTIVE'}
+                        </span>
                       </div>
-                      <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-white text-[#1e6641] border border-emerald-200 uppercase shrink-0">
-                        {rx.status || 'ACTIVE'}
-                      </span>
-                    </div>
 
-                    <div className="text-[11px] text-gray-700 font-medium">
-                      Dosage: <strong className="text-gray-900">{rx.dosage}</strong>
-                    </div>
-
-                    {rx.timing && (
-                      <div className="text-[10.5px] text-emerald-900 bg-white/80 px-2 py-1 rounded-md border border-emerald-200/60">
-                        ⏰ {rx.timing}
+                      <div className="text-[11px] text-gray-700 font-medium">
+                        Dosage: <strong className="text-gray-900">{rx.dosage}</strong>
                       </div>
-                    )}
 
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t border-emerald-200/40">
-                      <span>{rx.duration || '30 Days Supply'}</span>
-                      <span className="text-emerald-700 font-semibold">{rx.purpose || 'Chronic Care'}</span>
+                      {rx.timing && (
+                        <div className="text-[10.5px] text-emerald-900 bg-white/80 px-2 py-1 rounded-md border border-emerald-200/60">
+                          ⏰ {rx.timing}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t border-emerald-200/40">
+                        <span>{rx.duration || '30 Days Supply'}</span>
+                        <span className="text-emerald-700 font-semibold">{rx.purpose || 'Chronic Care'}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

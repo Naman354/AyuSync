@@ -98,6 +98,7 @@ export const searchPatients = async (req: Request, res: Response) => {
 
     const patients = await prisma.patient.findMany({
       where: whereCondition,
+      include: { identifiers: true },
       take: 20,
       orderBy: { createdAt: 'desc' }
     });

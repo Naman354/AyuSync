@@ -546,7 +546,7 @@ export default function PatientProfile() {
                 { icon: MapPin,   label: 'Village / Area', value: patient.village || patient.address || 'Baramati Rural' },
                 { icon: User,     label: 'ABHA / Health ID', value: patient.identifiers?.[0]?.value || patient.abhaId || 'ABHA-3948-2819-2091' },
                 { icon: User,     label: 'Frontline ASHA Worker', value: 'Sunita Patil (Baramati PHC)' },
-                { icon: Calendar, label: 'Enrolled On',    value: new Date(patient.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
+                { icon: Calendar, label: 'Enrolled On',    value: patient.createdAt ? new Date(patient.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently enrolled' },
               ].map(row => (
                 <div key={row.label} className="flex items-start gap-2.5">
                   <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center shrink-0">
@@ -915,7 +915,7 @@ export default function PatientProfile() {
                           <Pill size={12} /> Prescribed Treatments:
                         </div>
                         <div className="text-emerald-800">
-                          {enc.prescriptions.map((p: any) => p.medicationName || p.name).join(', ')}
+                          {enc.prescriptions.map((p: any) => p.medicationName || p.medicine || p.name).join(', ')}
                         </div>
                       </div>
                     )}
