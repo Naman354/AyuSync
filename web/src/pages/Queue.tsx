@@ -631,8 +631,12 @@ export default function Queue() {
             village: walkInVillage.trim() || undefined,
           });
           patientIdToEnqueue = regRes.data.id;
-        } catch {
-          patientIdToEnqueue = `walkin-${Date.now()}`;
+        } catch (err: any) {
+          if (err.response?.status === 409 && (err.response?.data?.candidate || err.response?.data?.patient?.id)) {
+            patientIdToEnqueue = err.response.data.candidate || err.response.data.patient.id;
+          } else {
+            patientIdToEnqueue = `walkin-${Date.now()}`;
+          }
         }
       }
 

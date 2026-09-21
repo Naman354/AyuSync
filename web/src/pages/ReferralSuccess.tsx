@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  CheckCircle2, Printer, Home, ArrowRight, ShieldCheck
+  CheckCircle2, Printer, Home, ArrowRight, ShieldCheck, User
 } from 'lucide-react';
 
 /**
@@ -231,10 +231,25 @@ export default function ReferralSuccess() {
               <p className="text-xs text-gray-500 mt-1">
                 Reference: <strong className="font-mono text-gray-800">{token}</strong> · Dispatched to <strong>{facility}</strong>
               </p>
+              {s.isAbdmLinked && (
+                <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[#1e6641] text-xs font-semibold">
+                  <ShieldCheck size={14} className="text-[#1e6641]" />
+                  <span>ABDM Longitudinal Record Linked {s.existingPatientId ? `· ID: ${s.existingPatientId}` : ''}</span>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {s.existingPatientId && (
+              <button
+                onClick={() => navigate(`/patients/${s.existingPatientId}`)}
+                className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-[#1e6641] text-xs font-semibold transition-colors"
+                title="View Patient Longitudinal Medical Profile"
+              >
+                <User size={15} /> Medical Profile
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#1e6641] hover:bg-[#165032] text-white text-xs font-bold shadow-xs transition-colors"
@@ -327,6 +342,17 @@ export default function ReferralSuccess() {
               <span className="font-mono text-xs font-semibold text-gray-700">{abhaRaw}</span>
             </div>
           </div>
+
+          {s.isAbdmLinked && (
+            <div className="mt-2.5 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg flex items-center justify-between text-[11px] text-gray-800">
+              <span className="font-bold flex items-center gap-1">
+                ✓ ABDM Verified Citizen Profile · Longitudinal Medical Record Linked
+              </span>
+              <span className="font-mono text-[10px] text-gray-600">
+                Registry ID: {s.existingPatientId || 'AYU-ABDM'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Clinical Presentation & Vitals at Referral */}

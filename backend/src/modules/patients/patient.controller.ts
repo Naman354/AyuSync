@@ -54,10 +54,16 @@ export const createPatient = async (req: Request, res: Response) => {
 
       // Prevent duplicate patients with same ABHA ID
       const existing = await prisma.patientIdentifier.findUnique({
-        where: { value: cleanAbha }
+        where: { value: cleanAbha },
+        include: { patient: true }
       });
       if (existing) {
-        return res.status(409).json({ error: 'Conflict', message: 'Patient with this ABHA ID already exists', candidate: existing.patientId });
+        return res.status(409).json({
+          error: 'Conflict',
+          message: 'Patient with this ABHA ID already exists',
+          candidate: existing.patientId,
+          patient: existing.patient
+        });
       }
     }
 

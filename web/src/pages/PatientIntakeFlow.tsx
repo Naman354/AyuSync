@@ -9,7 +9,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import {
   User, Activity, ArrowRight, ArrowLeft,
   Building2, Ambulance, Thermometer, Heart, Wind,
-  CheckCircle2, Info, AlertTriangle, Sparkles, Navigation, BedDouble
+  CheckCircle2, Info, AlertTriangle, Sparkles, Navigation, BedDouble, ShieldCheck
 } from 'lucide-react';
 
 
@@ -68,6 +68,32 @@ export default function PatientIntakeFlow() {
   const [rankedFacilities, setRankedFacilities] = useState<any[]>([]);
   const [routingLoading, setRoutingLoading] = useState(false);
   const [showAllClinics, setShowAllClinics] = useState(false);
+
+  // ABDM Smart Linker live detection state
+  const [matchedAbdmCitizen, setMatchedAbdmCitizen] = useState<{ id: string; name: string; abhaId: string } | null>(null);
+
+  const checkAbdmMatch = async (rawAbha: string) => {
+    const clean = rawAbha.replace(/[^a-zA-Z0-9-]/g, '').trim();
+    if (!clean || clean.length < 5) {
+      setMatchedAbdmCitizen(null);
+      return;
+    }
+    try {
+      const res = await api.get(`/patients/search?q=${encodeURIComponent(clean)}`);
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        const found = res.data.find((p: any) =>
+          p.identifiers?.some((id: any) => id.value === clean) || p.abhaId === clean
+        );
+        if (found) {
+          setMatchedAbdmCitizen({ id: found.id, name: found.name, abhaId: clean });
+          return;
+        }
+      }
+      setMatchedAbdmCitizen(null);
+    } catch {
+      // Graceful ignore
+    }
+  };
 
   const fetchFacilityRouting = async (targetUrgency?: string) => {
     const urg = (targetUrgency || effectiveUrgency || 'ROUTINE').toUpperCase();
@@ -362,6 +388,7 @@ export default function PatientIntakeFlow() {
     // Online submission flow
     try {
       let createdPatient: any = null;
+      let isAbdmLinked = false;
       try {
         const pRes = await api.post('/patients', {
           name: cleanName,
@@ -409,7 +436,23 @@ export default function PatientIntakeFlow() {
           });
           return;
         }
-        throw pErr;
+
+        // ABDM SMART LINKER: If patient with this ABHA already exists (HTTP 409 Conflict)
+        if (pErr.response?.status === 409 && pErr.response?.data?.candidate) {
+          const matchedPatient = pErr.response.data.patient || {
+            id: pErr.response.data.candidate,
+            name: cleanName,
+            age: cleanAge,
+            gender: patient.gender,
+            village: cleanVillage,
+            phone: cleanPhone,
+            abhaId: cleanAbha
+          };
+          createdPatient = matchedPatient;
+          isAbdmLinked = true;
+        } else {
+          throw pErr;
+        }
       }
 
       // Save to local cache so patient immediately shows up on ASHA worker's Recent Patients
@@ -433,11 +476,11 @@ export default function PatientIntakeFlow() {
       navigate('/referral-success', {
         state: {
           token,
-          patientName: cleanName,
-          age: cleanAge,
-          gender: patient.gender,
-          phone: cleanPhone,
-          village: cleanVillage,
+          patientName: createdPatient?.name || cleanName,
+          age: createdPatient?.age || cleanAge,
+          gender: createdPatient?.gender || patient.gender,
+          phone: createdPatient?.phone || cleanPhone,
+          village: createdPatient?.village || cleanVillage,
           abhaId: cleanAbha,
           urgency: effectiveUrgency,
           facilityName: facilities.find(f => f.id === selectedFacility)?.name || 'Baramati CHC',
@@ -449,6 +492,8 @@ export default function PatientIntakeFlow() {
           workerName: userObj.name || 'Sunita Patil (ASHA)',
           assessmentScore: assessment?.score,
           isOffline: false,
+          isAbdmLinked,
+          existingPatientId: createdPatient?.id
         }
       });
     } catch (e: any) {
@@ -531,6 +576,7 @@ export default function PatientIntakeFlow() {
                   setSymptoms(['High Blood Pressure', 'Severe Headache', 'Dizziness']);
                   setReferralNotes('Second trimester gestational hypertension with persistent headache and elevated blood pressure.');
                   setStepErrors({});
+                  checkAbdmMatch('91-8844-3321-0002');
                 }}
                 className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
               >
@@ -551,6 +597,7 @@ export default function PatientIntakeFlow() {
                   setSymptoms(['High Fever', 'Dry Cough', 'Vomiting']);
                   setReferralNotes('High-grade fever for 3 days unresponsive to paracetamol; lethargic and reduced oral intake.');
                   setStepErrors({});
+                  checkAbdmMatch('91-8844-3321-0003');
                 }}
                 className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
               >
@@ -571,6 +618,7 @@ export default function PatientIntakeFlow() {
                   setSymptoms(['High Blood Pressure', 'Weakness / Fatigue', 'Blurred Vision']);
                   setReferralNotes('Uncontrolled Type 2 Diabetes with Grade 1 Essential Hypertension; intermittent blurred vision.');
                   setStepErrors({});
+                  checkAbdmMatch('91-8844-3321-0001');
                 }}
                 className="text-xs px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-950 hover:bg-amber-100 font-semibold transition-colors cursor-pointer shadow-2xs"
               >
@@ -640,7 +688,26 @@ export default function PatientIntakeFlow() {
             </div>
             <div>
               <label className={LABEL}>ABHA / Health ID <span className="font-normal text-gray-400">(optional)</span></label>
-              <input type="text" value={patient.abhaId} onChange={e => setPatient({...patient, abhaId: e.target.value})} placeholder="14-digit ABHA number" className={INPUT} />
+              <input
+                type="text"
+                value={patient.abhaId}
+                onChange={e => {
+                  setPatient({...patient, abhaId: e.target.value});
+                  if (!e.target.value.trim()) setMatchedAbdmCitizen(null);
+                }}
+                onBlur={e => checkAbdmMatch(e.target.value)}
+                placeholder="14-digit ABHA number"
+                className={INPUT}
+              />
+              {matchedAbdmCitizen && (
+                <div className="mt-2.5 flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#1e6641] text-xs animate-in fade-in duration-200">
+                  <ShieldCheck size={16} className="shrink-0 text-[#1e6641] mt-0.5" />
+                  <div className="leading-relaxed">
+                    <span className="font-bold">ABDM Registry Matched:</span> Citizen profile found for <strong>{matchedAbdmCitizen.name}</strong>.
+                    New clinical consultation and referral will be attached to their continuous longitudinal health record.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
