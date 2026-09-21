@@ -475,7 +475,7 @@ export default function PatientDashboard() {
   useEffect(() => {
     fetchPatientData();
 
-    // Listen to cross-role / cross-tab task completion events
+    // Listen to cross-role / cross-tab task completion & clinical update events
     const onTaskCompleted = (e: any) => {
       const id = e.detail?.id;
       if (id) {
@@ -483,16 +483,25 @@ export default function PatientDashboard() {
       }
     };
 
+    const onClinicalUpdate = (e: any) => {
+      if (e.detail?.patientId === targetPatientId || !e.detail?.patientId) {
+        fetchPatientData();
+      }
+    };
+
     // Bug 2 fix: store the storage handler in a named variable so it can be cleaned up
     const onStorageChange = () => {
       setCompletedTaskIds(getCompletedTaskIds());
+      fetchPatientData();
     };
 
     window.addEventListener('ayusync:task_completed', onTaskCompleted);
+    window.addEventListener('ayusync:clinical_record_updated', onClinicalUpdate);
     window.addEventListener('storage', onStorageChange);
 
     return () => {
       window.removeEventListener('ayusync:task_completed', onTaskCompleted);
+      window.removeEventListener('ayusync:clinical_record_updated', onClinicalUpdate);
       window.removeEventListener('storage', onStorageChange);
     };
   }, [targetPatientId]);
@@ -688,19 +697,50 @@ export default function PatientDashboard() {
   const activeReferrals = allReferrals.filter((r: any) => r?.status !== 'COMPLETED' && r?.status !== 'CANCELLED');
   const pastReferrals = allReferrals.filter((r: any) => r?.status === 'COMPLETED' || r?.status === 'CANCELLED');
   const primaryReferral = activeReferrals[0] || pastReferrals[0] || allReferrals[0];
-  const conditions = p?.conditions || [];
+
+  // Merge extra session-cached conditions & prescriptions for resilient instant reflection
+  const extraConditions = targetPatientId ? JSON.parse(localStorage.getItem(`ayusync_extra_conditions_${targetPatientId}`) || '[]') : [];
+  const extraPrescriptions = targetPatientId ? JSON.parse(localStorage.getItem(`ayusync_extra_prescriptions_${targetPatientId}`) || '[]') : [];
+
+  const rawConditions = [...(p?.conditions || []), ...extraConditions];
+  const conditionsMap = new Map<string, any>();
+  rawConditions.forEach((c: any) => {
+    if (c?.name && !conditionsMap.has(c.name.toLowerCase().trim())) {
+      conditionsMap.set(c.name.toLowerCase().trim(), c);
+    }
+  });
+  const conditions = Array.from(conditionsMap.values());
   const activeConditions = conditions.filter((c: any) => c?.status === 'ACTIVE');
   const resolvedConditions = conditions.filter((c: any) => c?.status !== 'ACTIVE');
+
   const followUps = p?.followUps || [];
   const pendingFollowUps = followUps.filter((f: any) => f?.status !== 'COMPLETED' && !completedTaskIds.has(f?.id));
   const encounters = p?.encounters || [];
-  // Bug 4 fix: normalize prescriptions — encounter prescriptions from the backend use
-  // `medicationName` while demo/patient-level prescriptions use `medicine`. Unify to `medicine`.
-  const rawPrescriptions = p?.prescriptions || latestEncounter?.prescriptions || [];
-  const prescriptions = rawPrescriptions.map((rx: any) => ({
-    ...rx,
-    medicine: rx.medicine || rx.medicationName || rx.name || 'Unknown medication',
-  }));
+
+  // Combine prescriptions from patient, latest encounter, all encounters, and extraPrescriptions
+  const rawPrescriptions = [
+    ...(p?.prescriptions || []),
+    ...(latestEncounter?.prescriptions || []),
+    ...encounters.flatMap((e: any) => e.prescriptions || []),
+    ...extraPrescriptions
+  ];
+  const rxMap = new Map<string, any>();
+  rawPrescriptions.forEach((rx: any) => {
+    const medName = rx.medicine || rx.medicationName || rx.medication || rx.name;
+    if (medName && !rxMap.has(medName.toLowerCase().trim())) {
+      rxMap.set(medName.toLowerCase().trim(), {
+        ...rx,
+        id: rx.id || medName,
+        medicine: medName,
+        dosage: rx.dosage || rx.dose || 'As advised',
+        timing: rx.timing || rx.frequency || rx.instructions || 'Daily with meals',
+        duration: rx.duration || 'As prescribed',
+        purpose: rx.purpose || 'Prescribed regimen',
+        status: rx.status || 'ACTIVE'
+      });
+    }
+  });
+  const prescriptions = Array.from(rxMap.values());
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-page-in">

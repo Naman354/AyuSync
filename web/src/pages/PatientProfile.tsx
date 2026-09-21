@@ -225,6 +225,17 @@ export default function PatientProfile() {
     if (id) fetchPatient();
   }, [id]);
 
+  // Listen for real-time counter-referral and consultation completions
+  useEffect(() => {
+    const handleClinicalUpdate = (e: any) => {
+      if (e.detail?.patientId === id || !e.detail?.patientId) {
+        fetchPatient();
+      }
+    };
+    window.addEventListener('ayusync:clinical_record_updated', handleClinicalUpdate);
+    return () => window.removeEventListener('ayusync:clinical_record_updated', handleClinicalUpdate);
+  }, [id]);
+
   // Sync active patient profile dynamically across header and portal navigation
   useEffect(() => {
     if (patient?.name) {
@@ -468,7 +479,44 @@ export default function PatientProfile() {
   const latestVitals = latestEncounter?.vitals?.[0];
   const allEncounters = patient.encounters || [];
   const followUps = patient.followUps || [];
-  const conditions = patient.conditions || [];
+
+  // Merge extra session-cached conditions and prescriptions
+  const extraConditions = id ? JSON.parse(localStorage.getItem(`ayusync_extra_conditions_${id}`) || '[]') : [];
+  const extraPrescriptions = id ? JSON.parse(localStorage.getItem(`ayusync_extra_prescriptions_${id}`) || '[]') : [];
+
+  // Deduplicate and combine conditions
+  const conditionsMap = new Map<string, any>();
+  (patient.conditions || []).forEach((c: any) => {
+    if (c?.name) conditionsMap.set(c.name.toLowerCase().trim(), c);
+  });
+  extraConditions.forEach((c: any) => {
+    if (c?.name && !conditionsMap.has(c.name.toLowerCase().trim())) {
+      conditionsMap.set(c.name.toLowerCase().trim(), c);
+    }
+  });
+  const conditions = Array.from(conditionsMap.values());
+
+  // Aggregate all prescriptions from encounters, patient, and extraPrescriptions
+  const allPrescriptionsRaw = [
+    ...(patient.prescriptions || []),
+    ...allEncounters.flatMap((e: any) => e.prescriptions || []),
+    ...extraPrescriptions
+  ];
+  const prescriptionsMap = new Map<string, any>();
+  allPrescriptionsRaw.forEach((rx: any) => {
+    const medName = rx.medicine || rx.medicationName || rx.medication || rx.name;
+    if (medName && !prescriptionsMap.has(medName.toLowerCase().trim())) {
+      prescriptionsMap.set(medName.toLowerCase().trim(), {
+        id: rx.id || medName,
+        medicine: medName,
+        dosage: rx.dosage || rx.dose || 'As advised',
+        duration: rx.duration || '14 Days',
+        timing: rx.timing || rx.instructions || 'Daily with meals',
+        status: rx.status || 'ACTIVE'
+      });
+    }
+  });
+  const prescriptions = Array.from(prescriptionsMap.values());
 
   return (
     <div className="space-y-5 pb-16 animate-page-in">
@@ -593,6 +641,47 @@ export default function PatientProfile() {
                     }`}>
                       {c.status || 'ACTIVE'}
                     </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Active Prescriptions & Dosages */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-50">
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                <Pill size={15} className="text-[#1e6641]" />
+                Current Prescriptions & Dosages
+              </h2>
+              <span className="text-xs bg-emerald-50 text-[#1e6641] font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
+                {prescriptions.length} Active Rx
+              </span>
+            </div>
+
+            {prescriptions.length === 0 ? (
+              <p className="text-xs text-gray-400 italic py-2">No active prescriptions recorded.</p>
+            ) : (
+              <ul className="space-y-2">
+                {prescriptions.map((rx: any, idx: number) => (
+                  <li key={rx.id || idx} className="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-200/70 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <strong className="text-gray-950 flex items-center gap-1">
+                        <Pill size={12} className="text-[#1e6641]" />
+                        {rx.medicine}
+                      </strong>
+                      <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full bg-white text-[#1e6641] border border-emerald-200 uppercase">
+                        {rx.status || 'ACTIVE'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-700">
+                      Dosage: <span className="font-semibold text-gray-900">{rx.dosage}</span>
+                    </div>
+                    {rx.timing && rx.timing !== 'Daily with meals' && (
+                      <div className="text-[10px] text-emerald-800 bg-white/70 px-1.5 py-0.5 rounded border border-emerald-100">
+                        {rx.timing}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -220,11 +220,112 @@ export const createCounterReferral = async (req: Request, res: Response) => {
 
     const createdFollowUps = (await Promise.all(followUpPromises)).filter(Boolean);
 
-    // 5. Update referral status to COUNTER_REFERRED
+    // 5. Update referral status to COUNTER_REFERRED and log audit event
     await prisma.referral.update({
       where: { id: referral.id },
       data: { status: 'COUNTER_REFERRED' }
     }).catch(() => {});
+
+    // 5b. Record ReferralEvent transition in audit timeline
+    if (referral?.id) {
+      await prisma.referralEvent.create({
+        data: {
+          referralId: referral.id,
+          statusFrom: referral.status || 'PENDING',
+          statusTo: 'COUNTER_REFERRED',
+          notes: outcome ? `Doctor consultation outcome: ${outcome.slice(0, 140)}` : 'Doctor closed loop'
+        }
+      }).catch((evErr) => console.warn('[CounterReferral] ReferralEvent non-critical warning:', evErr));
+    }
+
+    // 5c. Automatically record Urgent Diagnosis into Patient Past Conditions & History
+    const isUrgent =
+      String(req.body.urgency || referral?.urgency || '').toUpperCase() === 'URGENT' ||
+      Boolean(qEntry?.priority && qEntry.priority > 0);
+
+    let createdCondition: any = null;
+    if (isUrgent && outcome && targetPatientId) {
+      try {
+        const rawOutcome = String(outcome).trim();
+        const firstSentence = rawOutcome.split(/[.;\n]/)[0].trim();
+        const conditionName = (firstSentence.length >= 3 && firstSentence.length <= 100)
+          ? firstSentence
+          : rawOutcome.slice(0, 100).trim();
+
+        if (conditionName) {
+          const existingCond = await prisma.condition.findFirst({
+            where: {
+              patientId: targetPatientId,
+              name: { equals: conditionName, mode: 'insensitive' }
+            }
+          });
+
+          if (!existingCond) {
+            createdCondition = await prisma.condition.create({
+              data: {
+                patientId: targetPatientId,
+                name: conditionName,
+                status: 'ACTIVE',
+                diagnosedAt: new Date()
+              }
+            });
+            console.log(`[CounterReferral] Auto-recorded urgent condition '${conditionName}' for patient ${targetPatientId}`);
+          } else {
+            createdCondition = existingCond;
+          }
+        }
+      } catch (condErr) {
+        console.warn('[CounterReferral] Condition recording non-critical warning:', condErr);
+      }
+    }
+
+    // 5d. Automatically record formal Encounter, Prescriptions, and Clinical Observations
+    let createdEncounter: any = null;
+    let createdPrescriptions: any[] = [];
+    if (targetPatientId) {
+      try {
+        let encFacilityId = targetFacilityId || referral.destinationId || referral.originId;
+        if (!encFacilityId) {
+          const fallbackFac = await prisma.facility.findFirst();
+          encFacilityId = fallbackFac?.id;
+        }
+
+        if (encFacilityId) {
+          const validMeds = (medications || []).filter((m: any) => m.name && String(m.name).trim());
+
+          createdEncounter = await prisma.encounter.create({
+            data: {
+              patientId: targetPatientId,
+              facilityId: encFacilityId,
+              type: isUrgent ? 'EMERGENCY_TRIAGE' : 'OPD_VISIT',
+              status: 'COMPLETED',
+              start: new Date(),
+              end: new Date(),
+              prescriptions: validMeds.length > 0 ? {
+                create: validMeds.map((m: any) => ({
+                  medication: String(m.name).trim(),
+                  dosage: m.dosage ? String(m.dosage).trim() : 'As advised',
+                  duration: m.duration ? String(m.duration).trim() : '14 Days',
+                  instructions: m.instructions ? String(m.instructions).trim() : (instructions ? String(instructions).trim() : undefined)
+                }))
+              } : undefined,
+              clinicalObs: (instructions || outcome) ? {
+                create: {
+                  note: `Consultation Diagnosis: ${outcome || 'Consultation completed'}. Doctor Advice: ${instructions || 'Follow prescribed protocol.'}`,
+                  provenance: 'DOCTOR_RECORDED'
+                }
+              } : undefined
+            },
+            include: { prescriptions: true, clinicalObs: true }
+          });
+
+          createdPrescriptions = createdEncounter.prescriptions || [];
+          console.log(`[CounterReferral] Created Encounter ${createdEncounter.id} with ${createdPrescriptions.length} Prescription(s) for patient ${targetPatientId}`);
+        }
+      } catch (encErr) {
+        console.warn('[CounterReferral] Encounter/Prescription recording non-critical warning:', encErr);
+      }
+    }
 
     // 6. Complete queue entries ONLY AFTER counter-referral and follow-ups succeed
     const targetQueueIds: string[] = [];
@@ -271,6 +372,9 @@ export const createCounterReferral = async (req: Request, res: Response) => {
           patient: result.referral.patient,
           followUps: result.followUps,
           medications,
+          condition: createdCondition,
+          encounter: createdEncounter,
+          prescriptions: createdPrescriptions,
           doctorInstructions: instructions,
           createdAt: new Date().toISOString(),
         });
@@ -282,6 +386,9 @@ export const createCounterReferral = async (req: Request, res: Response) => {
     res.status(201).json({
       counterReferral: result.counter,
       followUps: result.followUps,
+      condition: createdCondition,
+      encounter: createdEncounter,
+      prescriptions: createdPrescriptions,
       message: `Counter-referral created. ${result.followUps.length} follow-up task(s) assigned to worker.`
     });
   } catch (error: any) {
