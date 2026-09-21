@@ -75,36 +75,72 @@ async def explainable_triage(request: TriageRequest):
     confidence = 0.85
     missing_info = []
 
-    # Simple heuristic analysis
+    # Clinical heuristic and tele-triage rules analysis
     for vital in request.vitals:
         v_type = vital.type.upper()
-        v_val = vital.value
-        try:
-            val_num = float(v_val)
-            if v_type == 'SPO2' and val_num < 92:
-                urgency = "URGENT"
-                reasons.append(f"Critical SpO2 level detected: {val_num}%")
-                confidence = 0.95
-            elif v_type == 'TEMP':
-                if val_num > 103:
+        v_val = str(vital.value).strip()
+        if v_type == 'BP':
+            try:
+                parts = v_val.split('/')
+                sys_val = float(parts[0])
+                dia_val = float(parts[1]) if len(parts) > 1 else 80.0
+                if sys_val >= 160 or dia_val >= 100:
                     urgency = "URGENT"
-                    reasons.append(f"High fever detected: {val_num}°F")
-                elif val_num > 100:
+                    reasons.append(f"Hypertensive crisis / urgency detected: {sys_val}/{dia_val} mmHg")
+                    confidence = 0.96
+                elif sys_val < 90 and sys_val > 0:
+                    urgency = "URGENT"
+                    reasons.append(f"Severe hypotension / shock: Systolic {sys_val} mmHg (< 90)")
+                    confidence = 0.95
+                elif sys_val >= 140 or dia_val >= 90:
                     if urgency != "URGENT":
                         urgency = "PRIORITY"
-                    reasons.append(f"Mild fever detected: {val_num}°F")
-            elif v_type == 'HR' and (val_num > 120 or val_num < 50):
-                urgency = "URGENT"
-                reasons.append(f"Abnormal heart rate: {val_num} bpm")
-        except ValueError:
-            pass
+                    reasons.append(f"Stage 2 Hypertension detected: {sys_val}/{dia_val} mmHg")
+            except (ValueError, IndexError):
+                pass
+        else:
+            try:
+                val_num = float(v_val)
+                if v_type == 'SPO2':
+                    if val_num < 92:
+                        urgency = "URGENT"
+                        reasons.append(f"Critical SpO2 level detected: {val_num}% (< 92% hypoxia)")
+                        confidence = 0.97
+                    elif val_num < 95:
+                        if urgency != "URGENT":
+                            urgency = "PRIORITY"
+                        reasons.append(f"Borderline oxygen saturation: {val_num}%")
+                elif v_type == 'TEMP':
+                    if val_num >= 103:
+                        urgency = "URGENT"
+                        reasons.append(f"High fever / hyperpyrexia detected: {val_num}°F")
+                    elif val_num >= 100.4:
+                        if urgency != "URGENT":
+                            urgency = "PRIORITY"
+                        reasons.append(f"Fever detected: {val_num}°F")
+                elif v_type == 'HR':
+                    if val_num > 120 or val_num < 50:
+                        urgency = "URGENT"
+                        reasons.append(f"Abnormal critical heart rate: {val_num} bpm")
+                    elif val_num > 100:
+                        if urgency != "URGENT":
+                            urgency = "PRIORITY"
+                        reasons.append(f"Elevated resting pulse: {val_num} bpm")
+            except ValueError:
+                pass
 
-    for sym in request.symptoms:
-        s_name = sym.name.lower()
+    sym_names = [sym.name.lower() for sym in request.symptoms]
+    for s_name in sym_names:
         if "chest pain" in s_name or "breath" in s_name or "bleed" in s_name:
             urgency = "URGENT"
-            reasons.append(f"Critical symptom reported: {sym.name}")
+            reasons.append(f"Critical red-flag symptom reported: {s_name}")
             confidence = 0.98
+
+    has_bp_sym = any("blood pressure" in s or "hypertension" in s for s in sym_names)
+    has_vision_sym = any("vision" in s or "blur" in s or "headache" in s for s in sym_names)
+    if has_bp_sym and has_vision_sym:
+        urgency = "URGENT"
+        reasons.append("High-risk neuro-vascular combination: Blood pressure symptoms with blurred vision or severe headache")
 
     if not request.vitals:
         missing_info.append("Blood pressure")

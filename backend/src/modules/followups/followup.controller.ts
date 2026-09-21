@@ -3,42 +3,52 @@ import { prisma } from '../../lib/prisma';
 import { getIO } from '../../events/socket';
 import { createNotification } from '../notifications/notification.service';
 
-// Realistic fallback demo tasks if database is empty
+// Realistic fallback demo tasks if database is empty - unified across ASHA dashboard & Care Gaps
 const DEMO_SEED_FOLLOWUPS = [
   {
-    id: 'demo-fu-pooja',
+    id: 'demo-task-1',
     patientId: 'pat-pooja-sharma',
-    patient: { id: 'pat-pooja-sharma', name: 'Pooja Sharma' },
-    dueDate: new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString(), // 36 hours overdue
-    reason: 'High-risk gestational BP monitoring (Prescribed: Amlodipine 5mg OD)',
-    notes: 'Medications: Amlodipine 5mg OD. Verify morning blood pressure.',
-    status: 'OVERDUE',
+    patient: { id: 'pat-pooja-sharma', name: 'Pooja Sharma', age: 26, gender: 'FEMALE', village: 'Khandala Ward 2' },
+    dueDate: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+    reason: 'Post-consultation BP monitoring for Gestational Hypertension',
+    notes: 'Medications: Amlodipine 5mg OD. Measure sitting BP in right arm, check for ankle swelling.',
+    status: 'PENDING',
     createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
-    id: 'demo-fu-ramesh',
+    id: 'demo-task-2',
     patientId: 'pat-ramesh-kulkarni',
-    patient: { id: 'pat-ramesh-kulkarni', name: 'Ramesh Kulkarni' },
-    dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    reason: 'Verify Metformin 500mg compliance & fasting blood sugar level',
-    notes: 'Medications: Metformin 500mg twice daily with food.',
-    status: 'PENDING',
+    patient: { id: 'pat-ramesh-kulkarni', name: 'Ramesh Kulkarni', age: 58, gender: 'MALE', village: 'Khandala Sub-center' },
+    dueDate: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(), // 48 hours overdue
+    reason: 'Confirm Metformin 500mg compliance & check fasting blood sugar level',
+    notes: 'Medications: Metformin 500mg twice daily with meals. Assess dietary compliance.',
+    status: 'OVERDUE',
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
-    id: 'demo-fu-sunita',
+    id: 'demo-task-3',
     patientId: 'pat-sunita-chavan',
-    patient: { id: 'pat-sunita-chavan', name: 'Sunita Chavan' },
-    dueDate: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-    reason: 'Monthly Iron Folic Acid (IFA) tablet distribution and conjunctival pallor check',
-    notes: 'Medications: IFA Red tablets (100mg iron + 500mcg folic acid).',
+    patient: { id: 'pat-sunita-chavan', name: 'Sunita Chavan', age: 29, gender: 'FEMALE', village: 'Khandala Ward 3' },
+    dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    reason: 'Distribute monthly Iron Folic Acid (IFA) supply and verify conjunctival pallor',
+    notes: 'Medications: IFA Red tablets (100mg iron + 500mcg folic acid). Verify anemia pallor.',
     status: 'PENDING',
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
+    id: 'demo-task-4',
+    patientId: 'pat-aarav-patel',
+    patient: { id: 'pat-aarav-patel', name: 'Aarav Patel', age: 2, gender: 'MALE', village: 'Khandala East' },
+    dueDate: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(),
+    reason: 'Vaccination check - Pentavalent 3 & growth milestone review',
+    notes: 'Immunization drive session at Khandala Anganwadi. Verify mother brings MCP card.',
+    status: 'PENDING',
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
     id: 'demo-fu-meena',
     patientId: 'pat-meena-kumari',
-    patient: { id: 'pat-meena-kumari', name: 'Meena Kumari' },
+    patient: { id: 'pat-meena-kumari', name: 'Meena Kumari', age: 24, gender: 'FEMALE', village: 'Khandala North' },
     dueDate: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
     reason: 'Post-discharge cesarean suture line inspection & maternal well-being check',
     notes: 'Wound clean and dry. Patient advised on lactation hygiene.',

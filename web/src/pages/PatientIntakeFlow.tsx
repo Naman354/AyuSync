@@ -103,7 +103,13 @@ export default function PatientIntakeFlow() {
         urgencyCategory: urg,
         urgency: urg,
         symptoms: symptoms.map(s => ({ name: s })),
-        vitals
+        vitals,
+        patient: {
+          name: patient.name,
+          age: patient.age,
+          gender: patient.gender,
+          village: patient.address
+        }
       });
       const ranked = res.data?.ranked_facilities || [];
       setRankedFacilities(ranked);
@@ -133,7 +139,28 @@ export default function PatientIntakeFlow() {
 
   const toggleSymptom = (s: string) => {
     setStepErrors(prev => { const copy = { ...prev }; delete copy.symptoms; return copy; });
-    setSymptoms(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+    setSymptoms(prev => {
+      const next = prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s];
+      // Invalidate stale assessment and manual overrides so changes force clean recalculation
+      setAssessment(null);
+      setManualUrgency(null);
+      setRankedFacilities([]);
+      return next;
+    });
+  };
+
+  const updateVitalField = (key: keyof typeof vitals, val: string) => {
+    setVitals(prev => ({ ...prev, [key]: val }));
+    setAssessment(null);
+    setManualUrgency(null);
+    setRankedFacilities([]);
+  };
+
+  const handleApplyQuickVitals = (preset: typeof vitals) => {
+    setVitals(preset);
+    setAssessment(null);
+    setManualUrgency(null);
+    setRankedFacilities([]);
   };
 
 
@@ -231,28 +258,103 @@ export default function PatientIntakeFlow() {
 
     const spo2 = parseFloat(vitals.spO2) || 98;
     const sys  = parseFloat(vitals.bpSystolic) || 120;
+    const dia  = parseFloat(vitals.bpDiastolic) || 80;
+    const hr   = parseFloat(vitals.heartRate) || 78;
     const temp = parseFloat(vitals.temperature) || 98.6;
+    const age  = parseInt(patient.age || '30', 10);
+
+    const hasChestPain = symptoms.includes('Chest Pain');
+    const hasShortnessOfBreath = symptoms.includes('Shortness of Breath');
+    const hasHighBP = symptoms.includes('High Blood Pressure');
+    const hasBlurredVision = symptoms.includes('Blurred Vision');
+    const hasSevereHeadache = symptoms.includes('Severe Headache');
+    const hasHighFever = symptoms.includes('High Fever');
+    const hasVomiting = symptoms.includes('Vomiting');
+    const hasDizziness = symptoms.includes('Dizziness');
 
     let defaultUrgency = 'ROUTINE';
     let defaultScore = 25;
     let defaultTier = 'Health & Wellness Centre';
     const defaultReasons: string[] = [];
 
-    if (spo2 < 92 || sys >= 160 || symptoms.includes('Chest Pain')) {
+    // Critical clinical overrides (URGENT)
+    if (spo2 < 92) {
       defaultUrgency = 'URGENT';
-      defaultScore = 92;
+      defaultReasons.push(`Critical hypoxia: Blood oxygen level is dangerously low (${spo2}%) — normal is above 94%. Immediate oxygen therapy required.`);
+    }
+    if (sys >= 160 || dia >= 100) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push(`Hypertensive urgency: Blood pressure is dangerously elevated (${sys}/${dia} mmHg >= 160/100 mmHg).`);
+    } else if (sys < 90 && sys > 0) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push(`Severe hypotension: Systolic blood pressure (${sys} mmHg) is critically low (< 90 mmHg). Risk of circulatory shock.`);
+    }
+    if (hr > 120 || (hr < 50 && hr > 0)) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push(`Critical heart rate: Pulse is ${hr} bpm (abnormal resting rate).`);
+    }
+    if (temp >= 103 || (age < 5 && temp >= 102)) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push(`Hyperpyrexia: High fever (${temp}°F) carries danger of febrile seizures or sepsis.`);
+    }
+    if (hasChestPain) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push('Red-flag symptom: Chest pain reported — requires immediate ECG and cardiac evaluation.');
+    }
+    if (hasShortnessOfBreath) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push('Red-flag symptom: Acute shortness of breath indicates severe respiratory distress.');
+    }
+    if ((hasHighBP || sys >= 140) && (hasBlurredVision || hasSevereHeadache)) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push('High-risk neuro-vascular combination: Elevated blood pressure with blurred vision / severe headache (danger of pre-eclampsia / hypertensive crisis).');
+    }
+    if (hasDizziness && (sys < 100 || sys >= 150 || hr > 110)) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push('Hemodynamic instability: Dizziness accompanied by acute abnormal vital signs.');
+    }
+    if (age < 5 && (hasHighFever || temp >= 101.5) && hasVomiting) {
+      defaultUrgency = 'URGENT';
+      defaultReasons.push('Pediatric emergency: Young child with high fever and vomiting carries high dehydration and systemic infection risk.');
+    }
+
+    // Priority overrides (if not already URGENT)
+    if (defaultUrgency !== 'URGENT') {
+      if (spo2 < 95) {
+        defaultUrgency = 'PRIORITY';
+        defaultReasons.push(`Borderline oxygen level (${spo2}%).`);
+      }
+      if (sys >= 140 || dia >= 90 || hasHighBP) {
+        defaultUrgency = 'PRIORITY';
+        defaultReasons.push(`Elevated blood pressure (${sys}/${dia} mmHg) requires medical review today.`);
+      }
+      if (hr > 100) {
+        defaultUrgency = 'PRIORITY';
+        defaultReasons.push(`Elevated heart rate (${hr} bpm).`);
+      }
+      if (temp >= 100.4 || hasHighFever) {
+        defaultUrgency = 'PRIORITY';
+        defaultReasons.push(`Fever detected (${temp}°F).`);
+      }
+      if (hasVomiting || hasSevereHeadache || hasDizziness || symptoms.includes('Stomach Pain')) {
+        defaultUrgency = 'PRIORITY';
+        defaultReasons.push('Active acute symptoms reported requiring same-day physician consultation.');
+      }
+      if (symptoms.length >= 3) {
+        defaultUrgency = 'PRIORITY';
+        defaultReasons.push(`Multiple co-occurring symptoms (${symptoms.length}) reported.`);
+      }
+    }
+
+    if (defaultUrgency === 'URGENT') {
+      defaultScore = 95;
       defaultTier = 'Community Health Centre (CHC) or District Hospital';
-      if (spo2 < 92) defaultReasons.push(`Oxygen level is low (${spo2}%) — normal is above 94%.`);
-      if (sys >= 160) defaultReasons.push(`Blood pressure is very high (${sys}/${vitals.bpDiastolic} mmHg).`);
-      if (symptoms.includes('Chest Pain')) defaultReasons.push('Chest pain reported — needs immediate evaluation.');
-    } else if (spo2 < 95 || sys >= 140 || temp > 101 || symptoms.length >= 3) {
-      defaultUrgency = 'PRIORITY';
+    } else if (defaultUrgency === 'PRIORITY') {
       defaultScore = 65;
       defaultTier = 'Primary Health Centre (PHC)';
-      if (sys >= 140) defaultReasons.push(`Blood pressure is elevated (${sys}/${vitals.bpDiastolic} mmHg).`);
-      if (temp > 101) defaultReasons.push(`High fever (${temp}°F) — needs doctor review.`);
-      if (symptoms.length >= 3) defaultReasons.push(`Multiple symptoms reported (${symptoms.length}) — should be seen today.`);
     } else {
+      defaultScore = 25;
+      defaultTier = 'Health & Wellness Centre';
       defaultReasons.push('Vital signs and measurements are within normal clinical ranges.');
       defaultReasons.push('Suitable for regular monitoring or routine outpatient consultation.');
     }
@@ -745,7 +847,7 @@ export default function PatientIntakeFlow() {
               <button
                 type="button"
                 onClick={() => {
-                  setVitals({
+                  handleApplyQuickVitals({
                     bpSystolic: '154',
                     bpDiastolic: '98',
                     heartRate: '88',
@@ -760,7 +862,7 @@ export default function PatientIntakeFlow() {
               <button
                 type="button"
                 onClick={() => {
-                  setVitals({
+                  handleApplyQuickVitals({
                     bpSystolic: '102',
                     bpDiastolic: '66',
                     heartRate: '118',
@@ -775,7 +877,7 @@ export default function PatientIntakeFlow() {
               <button
                 type="button"
                 onClick={() => {
-                  setVitals({
+                  handleApplyQuickVitals({
                     bpSystolic: '120',
                     bpDiastolic: '80',
                     heartRate: '76',
@@ -795,16 +897,16 @@ export default function PatientIntakeFlow() {
               { label: 'Blood pressure', icon: Heart, iconColor: 'text-red-500', unit: 'mmHg',
                 content: (
                   <div className="flex items-center gap-1">
-                    <input type="text" value={vitals.bpSystolic} onChange={e => setVitals({...vitals, bpSystolic: e.target.value})} className="w-12 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
+                    <input type="text" value={vitals.bpSystolic} onChange={e => updateVitalField('bpSystolic', e.target.value)} className="w-12 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
                     <span className="text-gray-400 text-xs">/</span>
-                    <input type="text" value={vitals.bpDiastolic} onChange={e => setVitals({...vitals, bpDiastolic: e.target.value})} className="w-12 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
+                    <input type="text" value={vitals.bpDiastolic} onChange={e => updateVitalField('bpDiastolic', e.target.value)} className="w-12 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
                   </div>
                 )
               },
               { label: 'Oxygen level (SpO2)', icon: Wind, iconColor: 'text-blue-500', unit: '% · Normal > 94',
                 content: (
                   <div className="flex items-center gap-1">
-                    <input type="text" value={vitals.spO2} onChange={e => setVitals({...vitals, spO2: e.target.value})} className="w-14 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
+                    <input type="text" value={vitals.spO2} onChange={e => updateVitalField('spO2', e.target.value)} className="w-14 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
                     <span className="text-xs font-bold text-gray-700">%</span>
                   </div>
                 )
@@ -812,7 +914,7 @@ export default function PatientIntakeFlow() {
               { label: 'Heart rate', icon: Activity, iconColor: 'text-green-600', unit: 'bpm · Normal 60–100',
                 content: (
                   <div className="flex items-center gap-1">
-                    <input type="text" value={vitals.heartRate} onChange={e => setVitals({...vitals, heartRate: e.target.value})} className="w-14 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
+                    <input type="text" value={vitals.heartRate} onChange={e => updateVitalField('heartRate', e.target.value)} className="w-14 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
                     <span className="text-xs font-bold text-gray-700">bpm</span>
                   </div>
                 )
@@ -820,7 +922,7 @@ export default function PatientIntakeFlow() {
               { label: 'Temperature', icon: Thermometer, iconColor: 'text-amber-500', unit: '°F · Normal 98.6',
                 content: (
                   <div className="flex items-center gap-1">
-                    <input type="text" value={vitals.temperature} onChange={e => setVitals({...vitals, temperature: e.target.value})} className="w-14 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
+                    <input type="text" value={vitals.temperature} onChange={e => updateVitalField('temperature', e.target.value)} className="w-14 border border-gray-200 rounded-lg text-center text-sm font-bold py-1 focus:ring-2 focus:ring-[#1e6641] focus:outline-none" />
                     <span className="text-xs font-bold text-gray-700">°F</span>
                   </div>
                 )
@@ -1014,10 +1116,10 @@ export default function PatientIntakeFlow() {
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-            <Button variant="outline" onClick={() => setStep(2)} className="flex items-center gap-1.5 text-sm">
+            <Button variant="outline" onClick={() => { setManualUrgency(null); setStep(2); }} className="flex items-center gap-1.5 text-sm">
               <ArrowLeft size={14} /> Adjust measurements
             </Button>
-            <Button onClick={() => { fetchFacilityRouting(); setStep(4); }} className="bg-[#1e6641] hover:bg-[#165032] text-white flex items-center gap-2 h-11 px-6 cursor-pointer">
+            <Button onClick={() => { fetchFacilityRouting(effectiveUrgency); setStep(4); }} className="bg-[#1e6641] hover:bg-[#165032] text-white flex items-center gap-2 h-11 px-6 cursor-pointer">
               Next: Choose clinic <ArrowRight size={16} />
             </Button>
           </div>

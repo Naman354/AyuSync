@@ -12,25 +12,8 @@ import {
   Ambulance, UserCheck, History, Sparkles, LayoutDashboard
 } from 'lucide-react';
 
-const COMPLETED_TASKS_KEY = 'ayusync_completed_task_ids';
-
-export function getCompletedTaskIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(COMPLETED_TASKS_KEY);
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-export function markTaskAsCompletedGlobally(id: string) {
-  try {
-    const ids = getCompletedTaskIds();
-    ids.add(id);
-    localStorage.setItem(COMPLETED_TASKS_KEY, JSON.stringify(Array.from(ids)));
-    window.dispatchEvent(new CustomEvent('ayusync:task_completed', { detail: { id, status: 'COMPLETED' } }));
-  } catch {}
-}
+import { getCompletedTaskIds, markTaskAsCompletedGlobally } from '../lib/tasks';
+export { getCompletedTaskIds, markTaskAsCompletedGlobally };
 
 // ── Defensive Date & Observation Helpers (Zero Runtime Crashes) ──
 function safeFormatDate(val?: any, options?: Intl.DateTimeFormatOptions): string {
@@ -304,7 +287,16 @@ const DEMO_PATIENT_DATA: Record<string, any> = {
       }
     ],
     referrals: [],
-    followUps: []
+    followUps: [
+      {
+        id: 'demo-task-3',
+        dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        reason: 'Distribute monthly Iron Folic Acid (IFA) supply and verify conjunctival pallor',
+        notes: 'Medications: IFA Red tablets (100mg iron + 500mcg folic acid). Verify anemia pallor.',
+        status: 'PENDING',
+        worker: { user: { name: 'Sunita Patil (ASHA Worker)' } }
+      }
+    ]
   },
   'pat-aarav-patel': {
     id: 'pat-aarav-patel',
@@ -323,7 +315,16 @@ const DEMO_PATIENT_DATA: Record<string, any> = {
     ],
     encounters: [],
     referrals: [],
-    followUps: []
+    followUps: [
+      {
+        id: 'demo-task-4',
+        dueDate: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(),
+        reason: 'Vaccination check - Pentavalent 3 & growth milestone review',
+        notes: 'Immunization drive session at Khandala Anganwadi. Verify mother brings MCP card.',
+        status: 'PENDING',
+        worker: { user: { name: 'Sunita Patil (ASHA Worker)' } }
+      }
+    ]
   },
   'pat-meena-kumari': {
     id: 'pat-meena-kumari',
