@@ -12,25 +12,8 @@ import {
   Ambulance, UserCheck, History, Sparkles, LayoutDashboard
 } from 'lucide-react';
 
-const COMPLETED_TASKS_KEY = 'ayusync_completed_task_ids';
-
-export function getCompletedTaskIds(): Set<string> {
-  try {
-    const raw = localStorage.getItem(COMPLETED_TASKS_KEY);
-    return new Set(raw ? JSON.parse(raw) : []);
-  } catch {
-    return new Set();
-  }
-}
-
-export function markTaskAsCompletedGlobally(id: string) {
-  try {
-    const ids = getCompletedTaskIds();
-    ids.add(id);
-    localStorage.setItem(COMPLETED_TASKS_KEY, JSON.stringify(Array.from(ids)));
-    window.dispatchEvent(new CustomEvent('ayusync:task_completed', { detail: { id, status: 'COMPLETED' } }));
-  } catch {}
-}
+import { getCompletedTaskIds, markTaskAsCompletedGlobally } from '../lib/tasks';
+export { getCompletedTaskIds, markTaskAsCompletedGlobally };
 
 // ── Defensive Date & Observation Helpers (Zero Runtime Crashes) ──
 function safeFormatDate(val?: any, options?: Intl.DateTimeFormatOptions): string {
@@ -304,7 +287,16 @@ const DEMO_PATIENT_DATA: Record<string, any> = {
       }
     ],
     referrals: [],
-    followUps: []
+    followUps: [
+      {
+        id: 'demo-task-3',
+        dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        reason: 'Distribute monthly Iron Folic Acid (IFA) supply and verify conjunctival pallor',
+        notes: 'Medications: IFA Red tablets (100mg iron + 500mcg folic acid). Verify anemia pallor.',
+        status: 'PENDING',
+        worker: { user: { name: 'Sunita Patil (ASHA Worker)' } }
+      }
+    ]
   },
   'pat-aarav-patel': {
     id: 'pat-aarav-patel',
@@ -323,7 +315,16 @@ const DEMO_PATIENT_DATA: Record<string, any> = {
     ],
     encounters: [],
     referrals: [],
-    followUps: []
+    followUps: [
+      {
+        id: 'demo-task-4',
+        dueDate: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(),
+        reason: 'Vaccination check - Pentavalent 3 & growth milestone review',
+        notes: 'Immunization drive session at Khandala Anganwadi. Verify mother brings MCP card.',
+        status: 'PENDING',
+        worker: { user: { name: 'Sunita Patil (ASHA Worker)' } }
+      }
+    ]
   },
   'pat-meena-kumari': {
     id: 'pat-meena-kumari',
@@ -475,7 +476,7 @@ export default function PatientDashboard() {
   useEffect(() => {
     fetchPatientData();
 
-    // Listen to cross-role / cross-tab task completion events
+    // Listen to cross-role / cross-tab task completion & clinical update events
     const onTaskCompleted = (e: any) => {
       const id = e.detail?.id;
       if (id) {
@@ -483,13 +484,26 @@ export default function PatientDashboard() {
       }
     };
 
-    window.addEventListener('ayusync:task_completed', onTaskCompleted);
-    window.addEventListener('storage', () => {
+    const onClinicalUpdate = (e: any) => {
+      if (e.detail?.patientId === targetPatientId || !e.detail?.patientId) {
+        fetchPatientData();
+      }
+    };
+
+    // Bug 2 fix: store the storage handler in a named variable so it can be cleaned up
+    const onStorageChange = () => {
       setCompletedTaskIds(getCompletedTaskIds());
-    });
+      fetchPatientData();
+    };
+
+    window.addEventListener('ayusync:task_completed', onTaskCompleted);
+    window.addEventListener('ayusync:clinical_record_updated', onClinicalUpdate);
+    window.addEventListener('storage', onStorageChange);
 
     return () => {
       window.removeEventListener('ayusync:task_completed', onTaskCompleted);
+      window.removeEventListener('ayusync:clinical_record_updated', onClinicalUpdate);
+      window.removeEventListener('storage', onStorageChange);
     };
   }, [targetPatientId]);
 
@@ -642,6 +656,22 @@ export default function PatientDashboard() {
     window.print();
   };
 
+  // Bug 1 fix: this useEffect MUST be declared before any early return (React Rules of Hooks).
+  // It syncs the active patient name into the top navbar. Uses `patient` state directly.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const activeP = patient || DEMO_PATIENT_DATA[targetPatientId] || null;
+    if (activeP?.name) {
+      window.dispatchEvent(new CustomEvent('ayusync:active_patient', {
+        detail: { id: activeP.id || targetPatientId, name: activeP.name }
+      }));
+      try {
+        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: activeP.id || targetPatientId, name: activeP.name }));
+        sessionStorage.setItem('ayusync_selected_patient_id', activeP.id || targetPatientId);
+      } catch {}
+    }
+  }, [patient?.id, patient?.name, targetPatientId]);
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto space-y-5 animate-page-in p-2">
@@ -668,26 +698,50 @@ export default function PatientDashboard() {
   const activeReferrals = allReferrals.filter((r: any) => r?.status !== 'COMPLETED' && r?.status !== 'CANCELLED');
   const pastReferrals = allReferrals.filter((r: any) => r?.status === 'COMPLETED' || r?.status === 'CANCELLED');
   const primaryReferral = activeReferrals[0] || pastReferrals[0] || allReferrals[0];
-  const conditions = p?.conditions || [];
+
+  // Merge extra session-cached conditions & prescriptions for resilient instant reflection
+  const extraConditions = targetPatientId ? JSON.parse(localStorage.getItem(`ayusync_extra_conditions_${targetPatientId}`) || '[]') : [];
+  const extraPrescriptions = targetPatientId ? JSON.parse(localStorage.getItem(`ayusync_extra_prescriptions_${targetPatientId}`) || '[]') : [];
+
+  const rawConditions = [...(p?.conditions || []), ...extraConditions];
+  const conditionsMap = new Map<string, any>();
+  rawConditions.forEach((c: any) => {
+    if (c?.name && !conditionsMap.has(c.name.toLowerCase().trim())) {
+      conditionsMap.set(c.name.toLowerCase().trim(), c);
+    }
+  });
+  const conditions = Array.from(conditionsMap.values());
   const activeConditions = conditions.filter((c: any) => c?.status === 'ACTIVE');
   const resolvedConditions = conditions.filter((c: any) => c?.status !== 'ACTIVE');
+
   const followUps = p?.followUps || [];
   const pendingFollowUps = followUps.filter((f: any) => f?.status !== 'COMPLETED' && !completedTaskIds.has(f?.id));
   const encounters = p?.encounters || [];
-  const prescriptions = p?.prescriptions || latestEncounter?.prescriptions || [];
 
-  // Synchronize active patient with top-right navbar profile display
-  useEffect(() => {
-    if (p?.name) {
-      window.dispatchEvent(new CustomEvent('ayusync:active_patient', {
-        detail: { id: p.id || targetPatientId, name: p.name }
-      }));
-      try {
-        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: p.id || targetPatientId, name: p.name }));
-        sessionStorage.setItem('ayusync_selected_patient_id', p.id || targetPatientId);
-      } catch {}
+  // Combine prescriptions from patient, latest encounter, all encounters, and extraPrescriptions
+  const rawPrescriptions = [
+    ...(p?.prescriptions || []),
+    ...(latestEncounter?.prescriptions || []),
+    ...encounters.flatMap((e: any) => e.prescriptions || []),
+    ...extraPrescriptions
+  ];
+  const rxMap = new Map<string, any>();
+  rawPrescriptions.forEach((rx: any) => {
+    const medName = rx.medicine || rx.medicationName || rx.medication || rx.name;
+    if (medName && !rxMap.has(medName.toLowerCase().trim())) {
+      rxMap.set(medName.toLowerCase().trim(), {
+        ...rx,
+        id: rx.id || medName,
+        medicine: medName,
+        dosage: rx.dosage || rx.dose || 'As advised',
+        timing: rx.timing || rx.frequency || rx.instructions || 'Daily with meals',
+        duration: rx.duration || 'As prescribed',
+        purpose: rx.purpose || 'Prescribed regimen',
+        status: rx.status || 'ACTIVE'
+      });
     }
-  }, [p?.id, p?.name, targetPatientId]);
+  });
+  const prescriptions = Array.from(rxMap.values());
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20 animate-page-in">
@@ -956,36 +1010,45 @@ export default function PatientDashboard() {
                 </span>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                {prescriptions.map((rx: any, idx: number) => (
-                  <div key={rx.id || idx} className="p-3.5 rounded-xl border border-emerald-200/80 bg-emerald-50/40 space-y-2">
-                    <div className="flex items-start justify-between gap-1.5">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
-                        <Pill size={13} className="text-[#1e6641] shrink-0" />
-                        <span>{rx.medicine}</span>
+              {/* Bug 3 fix: show empty state instead of blank card */}
+              {prescriptions.length === 0 ? (
+                <div className="py-5 text-center rounded-xl bg-gray-50 border border-dashed border-gray-200 text-xs text-gray-500">
+                  <Pill size={24} className="mx-auto text-gray-300 mb-1.5" />
+                  <p className="font-semibold text-gray-600">No prescriptions on record</p>
+                  <p className="text-gray-400 mt-0.5">Prescriptions will appear here once assigned by the attending doctor.</p>
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {prescriptions.map((rx: any, idx: number) => (
+                    <div key={rx.id || idx} className="p-3.5 rounded-xl border border-emerald-200/80 bg-emerald-50/40 space-y-2">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                          <Pill size={13} className="text-[#1e6641] shrink-0" />
+                          <span>{rx.medicine}</span>
+                        </div>
+                        <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-white text-[#1e6641] border border-emerald-200 uppercase shrink-0">
+                          {rx.status || 'ACTIVE'}
+                        </span>
                       </div>
-                      <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-white text-[#1e6641] border border-emerald-200 uppercase shrink-0">
-                        {rx.status || 'ACTIVE'}
-                      </span>
-                    </div>
 
-                    <div className="text-[11px] text-gray-700 font-medium">
-                      Dosage: <strong className="text-gray-900">{rx.dosage}</strong>
-                    </div>
-
-                    {rx.timing && (
-                      <div className="text-[10.5px] text-emerald-900 bg-white/80 px-2 py-1 rounded-md border border-emerald-200/60">
-                        ⏰ {rx.timing}
+                      <div className="text-[11px] text-gray-700 font-medium">
+                        Dosage: <strong className="text-gray-900">{rx.dosage}</strong>
                       </div>
-                    )}
 
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t border-emerald-200/40">
-                      <span>{rx.duration || '30 Days Supply'}</span>
-                      <span className="text-emerald-700 font-semibold">{rx.purpose || 'Chronic Care'}</span>
+                      {rx.timing && (
+                        <div className="text-[10.5px] text-emerald-900 bg-white/80 px-2 py-1 rounded-md border border-emerald-200/60">
+                          ⏰ {rx.timing}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t border-emerald-200/40">
+                        <span>{rx.duration || '30 Days Supply'}</span>
+                        <span className="text-emerald-700 font-semibold">{rx.purpose || 'Chronic Care'}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

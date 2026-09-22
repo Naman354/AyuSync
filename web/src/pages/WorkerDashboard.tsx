@@ -14,21 +14,21 @@ import {
 } from 'lucide-react';
 import { useNetworkStatus } from '../lib/network';
 import { getOfflineQueue, getLocalPatients, flushOfflineSync } from '../lib/offlineSync';
-import { getCompletedTaskIds, markTaskAsCompletedGlobally } from './PatientDashboard';
+import { UNIFIED_DEMO_TASKS, getCompletedTaskIds, markTaskAsCompletedGlobally } from '../lib/tasks';
 
 // ── Task Card ─────────────────────────────────────────────────────────────────
 function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: string) => void; isNew?: boolean }) {
   const [completing, setCompleting] = useState(false);
   const [isCrossedOut, setIsCrossedOut] = useState(false);
   const due = task.dueDate ? new Date(task.dueDate) : null;
-  const isOverdue = due && due < new Date() && task.status !== 'COMPLETED';
+  const isOverdue = Boolean(task.isOverdue || task.status === 'OVERDUE' || (due && due < new Date() && task.status !== 'COMPLETED'));
 
   const handleComplete = async () => {
     setCompleting(true);
     // 1. Briefly animate the task text being crossed out
     setIsCrossedOut(true);
     markTaskAsCompletedGlobally(task.id);
-    api.patch(`/followups/${task.id}/complete`, {}).catch(() => {});
+    api.patch(`/followups/${task.id}/complete`, { completionNotes: 'Completed by ASHA worker via dashboard inbox' }).catch(() => {});
 
     // 2. Remove the task card from the visible list after 350ms
     setTimeout(() => {
@@ -42,16 +42,30 @@ function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: str
         {isCrossedOut ? <CheckCircle2 size={14} className="text-[#1e6641]" /> : <ClipboardList size={14} />}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-semibold truncate transition-all duration-300 ${isCrossedOut ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-          {task.reason}
-        </div>
-        <div className="text-xs text-gray-500 mt-0.5 space-x-2">
-          <span>{task.patient?.name || 'Patient'}</span>
-          {due && (
-            <span className={isOverdue && !isCrossedOut ? 'text-red-500 font-medium' : ''}>
-              · Due {due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className={`text-sm font-semibold truncate transition-all duration-300 ${isCrossedOut ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+            {task.reason}
+          </div>
+          {isOverdue && !isCrossedOut && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 uppercase tracking-wider">
+              Overdue
             </span>
           )}
+        </div>
+        <div className="text-xs text-gray-500 mt-0.5 space-x-2">
+          <span className="font-medium text-gray-700">{task.patient?.name || 'Patient'}</span>
+          {task.patient?.village && (
+            <span className="text-gray-400">· {task.patient.village}</span>
+          )}
+          {task.dueDateFormatted ? (
+            <span className={isOverdue && !isCrossedOut ? 'text-red-500 font-semibold' : ''}>
+              · Due {task.dueDateFormatted}
+            </span>
+          ) : due ? (
+            <span className={isOverdue && !isCrossedOut ? 'text-red-500 font-semibold' : ''}>
+              · Due {due.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            </span>
+          ) : null}
         </div>
         {task.notes && (
           <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
@@ -63,7 +77,7 @@ function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: str
         <button
           onClick={handleComplete}
           disabled={completing || isCrossedOut}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white transition-colors disabled:opacity-60"
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1e6641] hover:bg-[#165032] text-white transition-colors disabled:opacity-60 cursor-pointer shadow-2xs"
         >
           {isCrossedOut ? 'Done ✓' : completing ? '…' : 'Done'}
         </button>
@@ -73,32 +87,7 @@ function TaskCard({ task, onComplete, isNew }: { task: any; onComplete: (id: str
 }
 
 // ── Realistic Demo Fallbacks (shown if remote server is waking up or deploying) ──
-const DEMO_WORKER_TASKS = [
-  {
-    id: 'demo-task-1',
-    patient: { name: 'Pooja Sharma', id: 'pat-pooja-sharma' },
-    reason: 'Post-consultation BP monitoring for Gestational Hypertension (Instructions from Dr. Priya Kulkarni)',
-    notes: 'Medications: Amlodipine 5mg OD. Measure sitting BP in right arm.',
-    dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    status: 'PENDING',
-  },
-  {
-    id: 'demo-task-2',
-    patient: { name: 'Ramesh Kulkarni', id: 'pat-ramesh-kulkarni' },
-    reason: 'Confirm Metformin 500mg compliance & check fasting sugar',
-    notes: 'Medications: Metformin 500mg twice daily with meals.',
-    dueDate: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-    status: 'PENDING',
-  },
-  {
-    id: 'demo-task-3',
-    patient: { name: 'Sunita Chavan', id: 'pat-sunita-chavan' },
-    reason: 'Distribute monthly Iron Folic Acid (IFA) supply & check conjunctival pallor',
-    notes: 'Medications: IFA Red tablets (100mg elemental iron).',
-    dueDate: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
-    status: 'PENDING',
-  },
-];
+const DEMO_WORKER_TASKS = UNIFIED_DEMO_TASKS;
 
 const DEMO_WORKER_PATIENTS = [
   { id: 'pat-pooja-sharma', name: 'Pooja Sharma', age: 26, gender: 'FEMALE', village: 'Khandala Ward 2' },
@@ -152,7 +141,7 @@ export default function WorkerDashboard() {
     }
 
     try {
-      const fRes = await api.get('/followups?status=PENDING').catch(() => null);
+      const fRes = await api.get('/followups').catch(() => null);
       if (fRes?.data) {
         const list = Array.isArray(fRes.data) ? fRes.data : [];
         if (list.length > 0) taskList = list;
@@ -167,6 +156,7 @@ export default function WorkerDashboard() {
     setOfflineQueue(getOfflineQueue());
     setLoading(false);
   };
+
 
   useEffect(() => {
     refreshData();

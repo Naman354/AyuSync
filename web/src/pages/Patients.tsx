@@ -8,12 +8,7 @@ import EmptyState from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/SkeletonLoader';
 import { Search, Users, ChevronRight, X, Plus } from 'lucide-react';
 
-export default function Patients() {
-  const [search,      setSearch]      = useState('');
-  const [patients,    setPatients]    = useState<any[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState('');
-
+// Bug 5 fix: moved DEMO_PATIENTS to module level so it is not recreated on every render
 const DEMO_PATIENTS = [
   { id: 'pat-pooja-sharma', name: 'Pooja Sharma', age: 26, gender: 'FEMALE', village: 'Khandala Ward 2', phone: '+919822011223', identifiers: [{ type: 'ABHA', value: '91-8844-3321-0001' }] },
   { id: 'pat-ramesh-kulkarni', name: 'Ramesh Kulkarni', age: 58, gender: 'MALE', village: 'Khandala Sub-center', phone: '+919822011224', identifiers: [{ type: 'ABHA', value: '91-8844-3321-0002' }] },
@@ -21,6 +16,12 @@ const DEMO_PATIENTS = [
   { id: 'pat-aarav-patel', name: 'Aarav Patel', age: 2, gender: 'MALE', village: 'Khandala East', phone: '+919822011226', identifiers: [{ type: 'ABHA', value: '91-8844-3321-0004' }] },
   { id: 'pat-meena-kumari', name: 'Meena Kumari', age: 34, gender: 'FEMALE', village: 'Baramati Ward 1', phone: '+919822011227', identifiers: [{ type: 'ABHA', value: '91-8844-3321-0005' }] },
 ];
+
+export default function Patients() {
+  const [search,      setSearch]      = useState('');
+  const [patients,    setPatients]    = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
 
   const fetchPatients = async (q = search) => {
     try {
@@ -37,8 +38,6 @@ const DEMO_PATIENTS = [
   };
 
   useEffect(() => { fetchPatients(''); }, []);
-
-
 
   const user = getAuthUser() || {};
   const isWorker = user.role === 'WORKER';
@@ -68,7 +67,8 @@ const DEMO_PATIENTS = [
             className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1e6641] focus:outline-none bg-white"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && fetchPatients()}
+            // Bug 6 fix: pass search explicitly to avoid stale closure
+            onKeyDown={e => e.key === 'Enter' && fetchPatients(search)}
           />
           {search && (
             <button onClick={() => { setSearch(''); fetchPatients(''); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -98,65 +98,69 @@ const DEMO_PATIENTS = [
             {/* Desktop table header */}
             <div className="hidden sm:grid grid-cols-[2fr_1fr_1.5fr_auto] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500 uppercase tracking-wide">
               <span>Patient</span>
-              <span>Age & gender</span>
+              <span>Age &amp; gender</span>
               <span>Village / Area</span>
               <span className="text-right">Action</span>
             </div>
             <ul className="divide-y divide-gray-50">
-              {patients.map(p => (
-                <li key={p.id}>
-                  <Link
-                    to={`/patients/${p.id}`}
-                    onClick={() => {
-                      try {
-                        sessionStorage.setItem('ayusync_selected_patient_id', p.id);
-                        sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: p.id, name: p.name }));
-                        window.dispatchEvent(new CustomEvent('ayusync:active_patient', { detail: { id: p.id, name: p.name } }));
-                      } catch {}
-                    }}
-                    className="group sm:grid sm:grid-cols-[2fr_1fr_1.5fr_auto] flex items-center justify-between gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-gray-50/80 transition-colors"
-                  >
-                    {/* Column 1: Patient Identity */}
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-semibold text-sm shrink-0 shadow-2xs">
-                        {p.name?.charAt(0) || 'P'}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
-                        {p.abhaId ? (
-                          <span className="font-mono text-gray-400 text-[11px] block truncate">ID: {p.abhaId}</span>
-                        ) : p.phone ? (
-                          <span className="text-gray-400 text-[11px] block">{p.phone}</span>
-                        ) : null}
-                        {/* Mobile-only secondary info */}
-                        <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-                          <span>{p.age ? `${p.age} yrs` : '--'}</span>
-                          <span>·</span>
-                          <span>{p.gender || '--'}</span>
-                          {(p.village || p.address) && <><span>·</span><span className="truncate max-w-[120px]">{p.village || p.address}</span></>}
+              {patients.map(p => {
+                // Support both flat abhaId (demo) and identifiers array (real API)
+                const abhaDisplay = p.abhaId || p.identifiers?.[0]?.value || null;
+                return (
+                  <li key={p.id}>
+                    <Link
+                      to={`/patients/${p.id}`}
+                      onClick={() => {
+                        try {
+                          sessionStorage.setItem('ayusync_selected_patient_id', p.id);
+                          sessionStorage.setItem('ayusync_active_patient', JSON.stringify({ id: p.id, name: p.name }));
+                          window.dispatchEvent(new CustomEvent('ayusync:active_patient', { detail: { id: p.id, name: p.name } }));
+                        } catch {}
+                      }}
+                      className="group sm:grid sm:grid-cols-[2fr_1fr_1.5fr_auto] flex items-center justify-between gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-gray-50/80 transition-colors"
+                    >
+                      {/* Column 1: Patient Identity */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-[#e4efe7] text-[#1e6641] flex items-center justify-center font-semibold text-sm shrink-0 shadow-2xs">
+                          {p.name?.charAt(0) || 'P'}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-gray-900 truncate">{p.name}</div>
+                          {abhaDisplay ? (
+                            <span className="font-mono text-gray-400 text-[11px] block truncate">ID: {abhaDisplay}</span>
+                          ) : p.phone ? (
+                            <span className="text-gray-400 text-[11px] block">{p.phone}</span>
+                          ) : null}
+                          {/* Mobile-only secondary info */}
+                          <div className="sm:hidden text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                            <span>{p.age ? `${p.age} yrs` : '--'}</span>
+                            <span>·</span>
+                            <span>{p.gender || '--'}</span>
+                            {(p.village || p.address) && <><span>·</span><span className="truncate max-w-[120px]">{p.village || p.address}</span></>}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Column 2: Age & Gender */}
-                    <div className="hidden sm:block text-sm text-gray-700">
-                      <span className="font-medium text-gray-900">{p.age ? `${p.age} yrs` : '--'}</span>
-                      {p.gender && <span className="text-gray-400 text-xs ml-1.5">({p.gender})</span>}
-                    </div>
+                      {/* Column 2: Age & Gender */}
+                      <div className="hidden sm:block text-sm text-gray-700">
+                        <span className="font-medium text-gray-900">{p.age ? `${p.age} yrs` : '--'}</span>
+                        {p.gender && <span className="text-gray-400 text-xs ml-1.5">({p.gender})</span>}
+                      </div>
 
-                    {/* Column 3: Village / Address */}
-                    <div className="hidden sm:block text-sm text-gray-600 truncate">
-                      {p.village || p.address || <span className="text-gray-400 italic">Not recorded</span>}
-                    </div>
+                      {/* Column 3: Village / Address */}
+                      <div className="hidden sm:block text-sm text-gray-600 truncate">
+                        {p.village || p.address || <span className="text-gray-400 italic">Not recorded</span>}
+                      </div>
 
-                    {/* Column 4: Action */}
-                    <div className="flex items-center justify-end gap-1 text-xs font-semibold text-[#1e6641] group-hover:translate-x-0.5 transition-transform shrink-0">
-                      <span className="hidden lg:inline">View profile</span>
-                      <ChevronRight size={16} className="text-gray-400 group-hover:text-[#1e6641] transition-colors" />
-                    </div>
-                  </Link>
-                </li>
-              ))}
+                      {/* Column 4: Action */}
+                      <div className="flex items-center justify-end gap-1 text-xs font-semibold text-[#1e6641] group-hover:translate-x-0.5 transition-transform shrink-0">
+                        <span className="hidden lg:inline">View profile</span>
+                        <ChevronRight size={16} className="text-gray-400 group-hover:text-[#1e6641] transition-colors" />
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

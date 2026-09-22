@@ -155,11 +155,13 @@ function CounterReferralModal({
 
   const submit = async () => {
     if (!outcome.trim()) { setError('Please enter your consultation diagnosis or outcome.'); return; }
+    const isUrgent = entry.urgency === 'URGENT' || entry.referral?.urgency === 'URGENT' || (entry.priority && entry.priority > 0);
     const validTasks = tasks.filter(t => t.title.trim());
+    const validMeds = medications.filter(m => m.name.trim());
     setError('');
     setSubmitting(true);
     try {
-      await api.post('/followups/counter-referral', {
+      const res = await api.post('/followups/counter-referral', {
         referralId: referralId || queueEntryId,
         queueEntryId,
         patientId,
@@ -167,11 +169,51 @@ function CounterReferralModal({
         outcome,
         instructions,
         tasks: validTasks,
-        medications: medications.filter(m => m.name.trim()),
+        medications: validMeds,
+        urgency: isUrgent ? 'URGENT' : (entry.urgency || entry.referral?.urgency || 'ROUTINE')
       });
 
       // Also ensure queue entry is completed
       await api.put(`/queue/${entry.id}/status`, { status: 'COMPLETED' }).catch(() => {});
+
+      // Cache conditions & prescriptions in localStorage for resilient immediate visibility
+      if (patientId) {
+        if (res.data?.condition || isUrgent) {
+          const rawDiag = outcome.split(/[.;\n]/)[0].trim() || outcome.trim();
+          const newCondObj = res.data?.condition || {
+            id: `c-auto-${Date.now()}`,
+            name: rawDiag,
+            status: 'ACTIVE',
+            diagnosedAt: new Date().toISOString()
+          };
+          try {
+            const existingExtraConds = JSON.parse(localStorage.getItem(`ayusync_extra_conditions_${patientId}`) || '[]');
+            if (!existingExtraConds.some((c: any) => c.name?.toLowerCase() === newCondObj.name?.toLowerCase())) {
+              localStorage.setItem(`ayusync_extra_conditions_${patientId}`, JSON.stringify([newCondObj, ...existingExtraConds]));
+            }
+          } catch {}
+        }
+
+        if (validMeds.length > 0) {
+          const newRxList = validMeds.map((m, idx) => ({
+            id: `rx-auto-${Date.now()}-${idx}`,
+            medicine: m.name.trim(),
+            medication: m.name.trim(),
+            dosage: m.dosage ? m.dosage.trim() : 'As advised',
+            timing: instructions || 'Daily with meals',
+            duration: '14 Days',
+            status: 'ACTIVE'
+          }));
+          try {
+            const existingExtraRx = JSON.parse(localStorage.getItem(`ayusync_extra_prescriptions_${patientId}`) || '[]');
+            localStorage.setItem(`ayusync_extra_prescriptions_${patientId}`, JSON.stringify([...newRxList, ...existingExtraRx]));
+          } catch {}
+        }
+
+        window.dispatchEvent(new CustomEvent('ayusync:clinical_record_updated', {
+          detail: { patientId, condition: res.data?.condition, prescriptions: validMeds, outcome, instructions }
+        }));
+      }
 
       setSuccess(true);
       setTimeout(() => { onClose(); onSuccess(); }, 1200);
@@ -631,8 +673,12 @@ export default function Queue() {
             village: walkInVillage.trim() || undefined,
           });
           patientIdToEnqueue = regRes.data.id;
-        } catch {
-          patientIdToEnqueue = `walkin-${Date.now()}`;
+        } catch (err: any) {
+          if (err.response?.status === 409 && (err.response?.data?.candidate || err.response?.data?.patient?.id)) {
+            patientIdToEnqueue = err.response.data.candidate || err.response.data.patient.id;
+          } else {
+            patientIdToEnqueue = `walkin-${Date.now()}`;
+          }
         }
       }
 

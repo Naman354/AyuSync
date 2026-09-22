@@ -7,7 +7,7 @@ import PageShell from '../components/ui/PageShell';
 import EmptyState from '../components/ui/EmptyState';
 import InlineError from '../components/ui/InlineError';
 import api from '../lib/api';
-import { getCompletedTaskIds, markTaskAsCompletedGlobally } from './PatientDashboard';
+import { UNIFIED_DEMO_TASKS, getCompletedTaskIds, markTaskAsCompletedGlobally } from '../lib/tasks';
 
 interface Task {
   id: string;
@@ -66,60 +66,20 @@ function removePersistedEscalation(id: string) {
   syncPersistedEscalations(current);
 }
 
-const DEMO_TASKS: Task[] = [
-  {
-    id: '1',
-    patientName: 'Pooja Sharma',
-    age: 26,
-    gender: 'FEMALE',
-    village: 'Khandala Ward 2',
-    taskTitle: 'Check blood pressure at home visit',
-    category: 'MOTHER_BABY',
-    dueDate: 'Today',
-    isOverdue: false,
-    completed: false,
-    notes: 'History of high BP in pregnancy. Doctor instructions: measure sitting BP in right arm, check for ankle swelling.',
-  },
-  {
-    id: '2',
-    patientName: 'Ramesh Kulkarni',
-    age: 58,
-    gender: 'MALE',
-    village: 'Khandala Sub-center',
-    taskTitle: 'Confirm diabetes medicine compliance & fasting sugar',
-    category: 'ONGOING',
-    dueDate: '2 days ago',
-    isOverdue: true,
-    completed: false,
-    notes: 'Prescribed Metformin 500mg. Confirm stock available at sub-center and assess diet compliance.',
-  },
-  {
-    id: '4',
-    patientName: 'Aarav Patel',
-    age: 2,
-    gender: 'MALE',
-    village: 'Khandala East',
-    taskTitle: 'Vaccination check - Pentavalent 3',
-    category: 'INFECTION',
-    dueDate: 'Tomorrow',
-    isOverdue: false,
-    completed: false,
-    notes: 'Immunization drive session at Khandala Anganwadi. Verify mother brings MCP card.',
-  },
-  {
-    id: '6',
-    patientName: 'Sunita Chavan',
-    age: 29,
-    gender: 'FEMALE',
-    village: 'Khandala Ward 3',
-    taskTitle: 'Distribute monthly IFA supply & verify conjunctival pallor',
-    category: 'MOTHER_BABY',
-    dueDate: 'Today',
-    isOverdue: false,
-    completed: false,
-    notes: 'Severe anemia history. Supply 30 IFA red tablets and encourage dietary green vegetables.',
-  }
-];
+const DEMO_TASKS: Task[] = UNIFIED_DEMO_TASKS.map(t => ({
+  id: t.id,
+  patientName: t.patient.name,
+  age: t.patient.age || 30,
+  gender: t.patient.gender || 'FEMALE',
+  village: t.patient.village || 'Khandala Sub-center',
+  taskTitle: t.reason,
+  category: t.category,
+  dueDate: t.dueDateFormatted,
+  dueDateRaw: t.dueDate,
+  isOverdue: t.isOverdue,
+  completed: false,
+  notes: t.notes,
+}));
 
 type FilterType = 'ALL' | 'OVERDUE' | 'TODAY';
 
